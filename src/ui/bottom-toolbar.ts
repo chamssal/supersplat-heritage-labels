@@ -5,6 +5,7 @@ import { ShortcutManager } from '../shortcut-manager';
 import { i18n } from './localization';
 import { MenuPanel } from './menu-panel';
 import measureSvg from './svg/measure.svg';
+import tagSvg from './svg/tag.svg';
 import orientSvg from './svg/orient.svg';
 import redoSvg from './svg/redo.svg';
 import boxSvg from './svg/select-box.svg';
@@ -298,6 +299,11 @@ class BottomToolbar extends Container {
             class: 'bottom-toolbar-tool'
         });
 
+        const label = new Button({
+            id: 'bottom-toolbar-label',
+            class: 'bottom-toolbar-tool'
+        });
+
         const orient = new Button({
             id: 'bottom-toolbar-orient',
             class: 'bottom-toolbar-tool'
@@ -323,6 +329,7 @@ class BottomToolbar extends Container {
         sphere.dom.appendChild(createSvg(sphereSvg));
         box.dom.appendChild(createSvg(boxSvg));
         measure.dom.appendChild(createSvg(measureSvg));
+        label.dom.appendChild(createSvg(tagSvg));
         orient.dom.appendChild(createSvg(orientSvg));
         // crop.dom.appendChild(createSvg(cropSvg));
 
@@ -347,6 +354,7 @@ class BottomToolbar extends Container {
         this.append(scale);
         this.append(new Element({ class: 'bottom-toolbar-separator' }));
         this.append(measure);
+        this.append(label);
         this.append(orient);
         this.append(coordSpace);
         this.append(origin);
@@ -370,6 +378,7 @@ class BottomToolbar extends Container {
         rotate.dom.addEventListener('click', () => events.fire('tool.rotate'));
         scale.dom.addEventListener('click', () => events.fire('tool.scale'));
         measure.dom.addEventListener('click', () => events.fire('tool.measure'));
+        label.dom.addEventListener('click', () => events.fire('tool.label'));
         orient.dom.addEventListener('click', () => events.fire('tool.orient'));
         coordSpace.dom.addEventListener('click', () => events.fire('tool.toggleCoordSpace'));
         origin.dom.addEventListener('click', (e: MouseEvent) => {
@@ -431,6 +440,7 @@ class BottomToolbar extends Container {
             rotate.class[toolName === 'rotate' ? 'add' : 'remove']('active');
             scale.class[toolName === 'scale' ? 'add' : 'remove']('active');
             measure.class[toolName === 'measure' ? 'add' : 'remove']('active');
+            label.class[toolName === 'label' ? 'add' : 'remove']('active');
             orient.class[toolName === 'orient' ? 'add' : 'remove']('active');
         });
 
@@ -452,6 +462,7 @@ class BottomToolbar extends Container {
         tooltips.register(rotate, tooltip('tooltip.bottom-toolbar.rotate', 'tool.rotateShortcut'));
         tooltips.register(scale, tooltip('tooltip.bottom-toolbar.scale', 'tool.scaleShortcut'));
         tooltips.register(measure, tooltip('tooltip.bottom-toolbar.measure'));
+        tooltips.register(label, tooltip('tooltip.bottom-toolbar.label'));
         tooltips.register(orient, tooltip('tooltip.bottom-toolbar.orient'));
         tooltips.register(coordSpace, tooltip('tooltip.bottom-toolbar.local-space', 'tool.toggleCoordSpace'));
         tooltips.register(origin, () => i18n.t(

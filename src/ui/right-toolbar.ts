@@ -9,6 +9,7 @@ import cameraResetSvg from './svg/camera-reset.svg';
 import flyCameraSvg from './svg/fly-camera.svg';
 import orbitCameraSvg from './svg/orbit-camera.svg';
 import overlaysSvg from './svg/overlays.svg';
+import tagSvg from './svg/tag.svg';
 import { Tooltips } from './tooltips';
 
 const createSvg = (svgString: string) => {
@@ -54,6 +55,11 @@ class RightToolbar extends Container {
             class: 'right-toolbar-button'
         });
 
+        const segments = new Button({
+            id: 'right-toolbar-segments',
+            class: 'right-toolbar-toggle'
+        });
+
         const overlays = new Button({
             id: 'right-toolbar-overlays',
             class: 'right-toolbar-toggle'
@@ -71,11 +77,13 @@ class RightToolbar extends Container {
         cameraFrameSelection.dom.appendChild(createSvg(cameraFrameSelectionSvg));
         cameraReset.dom.appendChild(createSvg(cameraResetSvg));
         overlays.dom.appendChild(createSvg(overlaysSvg));
+        segments.dom.appendChild(createSvg(tagSvg));
 
         // icon-only buttons: keep accessible names in sync with the language
         const buttonLabels: [Button, string][] = [
             [appearance, 'panel.appearance'],
             [overlays, 'panel.overlays'],
+            [segments, 'panel.segments'],
             [orbitMode, 'tooltip.right-toolbar.orbit-camera'],
             [flyMode, 'tooltip.right-toolbar.fly-camera'],
             [cameraFrameSelection, 'tooltip.right-toolbar.frame-selection'],
@@ -88,6 +96,7 @@ class RightToolbar extends Container {
 
         this.append(appearance);
         this.append(overlays);
+        this.append(segments);
         this.append(new Element({ class: 'right-toolbar-separator' }));
         this.append(orbitMode);
         this.append(flyMode);
@@ -116,6 +125,7 @@ class RightToolbar extends Container {
         tooltips.register(cameraFrameSelection, tooltip('tooltip.right-toolbar.frame-selection', 'camera.focus'), 'left');
         tooltips.register(cameraReset, tooltip('tooltip.right-toolbar.reset-camera', 'camera.reset'), 'left');
         tooltips.register(overlays, tooltip('panel.overlays'), 'left');
+        tooltips.register(segments, tooltip('panel.segments'), 'left');
         tooltips.register(settings, tooltip('panel.settings'), 'left');
 
         // add event handlers
@@ -126,6 +136,7 @@ class RightToolbar extends Container {
         cameraFrameSelection.on('click', () => events.fire('camera.focus'));
         cameraReset.on('click', () => events.fire('camera.reset'));
         overlays.on('click', () => events.fire('overlaysPanel.toggleVisible'));
+        segments.on('click', () => events.fire('segmentsPanel.toggleVisible'));
         settings.on('click', () => events.fire('settingsPanel.toggleVisible'));
 
         events.on('appearancePanel.visible', (visible: boolean) => {
@@ -135,6 +146,10 @@ class RightToolbar extends Container {
         events.on('camera.controlMode', (mode: 'orbit' | 'fly') => {
             orbitMode.class[mode === 'orbit' ? 'add' : 'remove']('active');
             flyMode.class[mode === 'fly' ? 'add' : 'remove']('active');
+        });
+
+        events.on('segmentsPanel.visible', (visible: boolean) => {
+            segments.class[visible ? 'add' : 'remove']('active');
         });
 
         events.on('overlaysPanel.visible', (visible: boolean) => {

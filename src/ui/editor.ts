@@ -15,6 +15,7 @@ import { i18n } from './localization';
 import { Menu } from './menu';
 import { OverdrawLegend } from './overdraw-legend';
 import { OverlaysPanel } from './overlays-panel';
+import { SegmentsPanel } from './segments-panel';
 import { PerfOverlay } from './perf-overlay';
 import logo from './playcanvas-logo.png';
 import { Popup, ShowOptions } from './popup';
@@ -110,6 +111,7 @@ class EditorUI {
         const settingsPanel = new SettingsPanel(events, tooltips);
         const appearancePanel = new AppearancePanel(events, tooltips);
         const overlaysPanel = new OverlaysPanel(events, tooltips);
+        const segmentsPanel = new SegmentsPanel(events, tooltips);
         const bottomToolbar = new BottomToolbar(events, tooltips);
         const rightToolbar = new RightToolbar(events, tooltips);
         const menu = new Menu(events);
@@ -134,6 +136,7 @@ class EditorUI {
         canvasContainer.append(settingsPanel);
         canvasContainer.append(appearancePanel);
         canvasContainer.append(overlaysPanel);
+        canvasContainer.append(segmentsPanel);
 
         // view axes container
         const viewCube = new ViewCube(events);
