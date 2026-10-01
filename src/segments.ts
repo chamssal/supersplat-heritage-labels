@@ -307,8 +307,8 @@ const registerSegmentEvents = (events: Events) => {
     events.on('segments.setArtifact', (name: string, id: string) => {
         const data = dataOf(selected());
         if (data) {
-            data.artifactName = name;
-            data.artifactId = id;
+            data.artifactName = name.trim();
+            data.artifactId = id.trim();
         }
     });
 
@@ -349,11 +349,11 @@ const registerSegmentEvents = (events: Events) => {
 
         return {
             version: FILE_VERSION,
-            artifactName: data.artifactName,
-            artifactId: data.artifactId,
+            HeritageName: data.artifactName,
+            HeritageId: data.artifactId,
             numGaussians: numRows,
             layers: data.layers.slice(),
-            segments: data.segments.map(s => ({
+            parts: data.segments.map(s => ({
                 id: s.id, name: s.name, layer: s.layer, color: s.color
             })),
             labels
@@ -374,11 +374,14 @@ const registerSegmentEvents = (events: Events) => {
         }
 
         data.clear();
-        data.artifactName = typeof doc.artifactName === 'string' ? doc.artifactName : '';
-        data.artifactId = typeof doc.artifactId === 'string' ? doc.artifactId : '';
+        // v3 writes HeritageName/HeritageId/parts; older files used artifactName/artifactId/segments
+        const name = doc.HeritageName ?? doc.artifactName;
+        const id = doc.HeritageId ?? doc.artifactId;
+        data.artifactName = typeof name === 'string' ? name.trim() : '';
+        data.artifactId = typeof id === 'string' ? id.trim() : '';
 
         // v1 used `name`, v2 used `partName`, v3 adds `layer`
-        const incoming: Segment[] = (doc.segments ?? []).map((s: any, i: number) => ({
+        const incoming: Segment[] = ((doc.parts ?? doc.segments) ?? []).map((s: any, i: number) => ({
             id: typeof s.id === 'number' ? s.id : i,
             name: s.name ?? s.partName ?? `segment ${i}`,
             layer: s.layer ?? DEFAULT_LAYER,

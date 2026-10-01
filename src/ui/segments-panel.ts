@@ -235,7 +235,7 @@ class SegmentsPanel extends Container {
             if (!doc) {
                 return;
             }
-            const base = (doc.artifactId || doc.artifactName || 'labels').replace(/[^\w.-]+/g, '_');
+            const base = (doc.HeritageId || doc.HeritageName || 'labels').trim().replace(/[^\w.-]+/g, '_');
             const blob = new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' });
             const url = window.URL.createObjectURL(blob);
             const anchor = document.createElement('a');
