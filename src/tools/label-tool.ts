@@ -90,7 +90,8 @@ class LabelTool {
 
                     const name = document.createElement('span');
                     name.classList.add('label-tool-tip-name');
-                    name.textContent = label.name;
+                    // the whole chain, so the hierarchy is readable at a glance
+                    name.textContent = label.path.join(' › ');
 
                     row.appendChild(swatch);
                     row.appendChild(layer);

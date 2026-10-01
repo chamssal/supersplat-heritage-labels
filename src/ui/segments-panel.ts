@@ -1,11 +1,12 @@
-import { Button, Container, Label, TextInput } from '@playcanvas/pcui';
+import { Button, Container, Label, SelectInput, TextInput } from '@playcanvas/pcui';
 
 import { Events } from '../events';
-import { DEFAULT_LAYER, SplatSegments } from '../segments';
+import { DEFAULT_LAYER, Segment, SplatSegments } from '../segments';
 import { i18n } from './localization';
 import deleteSvg from './svg/delete.svg';
 import exportSvg from './svg/export.svg';
 import importSvg from './svg/import.svg';
+import selectAddSvg from './svg/select-add.svg';
 import selectAllSvg from './svg/select-all.svg';
 import tagSvg from './svg/tag.svg';
 import { Tooltips } from './tooltips';
@@ -27,6 +28,10 @@ const iconButton = (svg: string, className: string, ariaKey: string) => {
 // Segment labels, grouped by layer. A gaussian carries at most one label per
 // layer, so the layers are parallel axes: "부재" and "손상" can both apply to the
 // same gaussian without either containing the other.
+//
+// Inside a layer the labels form a tree. Each label may name a parent label of
+// the same layer, so a hierarchy of any depth is expressed without inventing a
+// layer per level. The list below renders that tree, indented by depth.
 class SegmentsPanel extends Container {
     constructor(events: Events, tooltips: Tooltips, args = {}) {
         args = {
@@ -100,6 +105,36 @@ class SegmentsPanel extends Container {
         assignRow.append(nameInput);
         assignRow.append(assignButton);
 
+        // ---- parent of the label about to be created ------------------------
+
+        const parentRow = new Container({ class: 'segments-row' });
+        const parentLabel = new Label({ class: 'segments-field-label' });
+        i18n.bindText(parentLabel, 'panel.segments.parent');
+        const parentSelect = new SelectInput({ class: 'segments-parent-select', value: '' });
+        parentRow.append(parentLabel);
+        parentRow.append(parentSelect);
+
+        // the options depend on the layer being typed into, so they are rebuilt
+        // whenever the list is rebuilt or the layer field changes
+        const refreshParents = () => {
+            const data = events.invoke('segments.data') as SplatSegments;
+            const layer = (layerInput.value ?? '').trim() || DEFAULT_LAYER;
+            const options = [{ v: '', t: i18n.t('panel.segments.no-parent') }];
+            if (data) {
+                data.segmentsOfLayer(layer).forEach((segment) => {
+                    options.push({
+                        v: `${segment.id}`,
+                        t: data.pathOf(segment.id).map(s => s.name).join(' › ')
+                    });
+                });
+            }
+            const previous = parentSelect.value;
+            parentSelect.options = options;
+            parentSelect.value = options.some(o => o.v === previous) ? previous : '';
+        };
+
+        layerInput.on('change', refreshParents);
+
         const hint = new Label({ class: 'segments-hint' });
         i18n.bindText(hint, 'panel.segments.hint');
 
@@ -125,6 +160,7 @@ class SegmentsPanel extends Container {
         this.append(artifactIdRow);
         this.append(status);
         this.append(assignRow);
+        this.append(parentRow);
         this.append(list);
         this.append(footer);
         this.append(hint);
@@ -170,8 +206,9 @@ class SegmentsPanel extends Container {
                 groupHeader.append(groupDelete);
                 group.append(groupHeader);
 
-                data.segmentsOfLayer(layer).forEach((segment) => {
+                const addRow = (segment: Segment, depth: number) => {
                     const row = new Container({ class: 'segments-item' });
+                    row.dom.style.paddingLeft = `${depth * 14}px`;
 
                     const swatch = new Label({ class: 'segments-swatch' });
                     swatch.dom.style.backgroundColor = segment.color;
@@ -183,14 +220,29 @@ class SegmentsPanel extends Container {
                         }
                     });
 
+                    // own gaussians, then the whole subtree when it has children
+                    const subtree = data.descendantsOf(segment.id);
+                    const own = data.countOf(segment.id);
+                    const total = subtree.reduce((sum, id) => sum + data.countOf(id), 0);
                     const count = new Label({
                         class: 'segments-item-count',
-                        text: i18n.formatInteger(data.countOf(segment.id))
+                        text: total === own ?
+                            i18n.formatInteger(own) :
+                            `${i18n.formatInteger(own)} / ${i18n.formatInteger(total)}`
                     });
 
                     const addButton = iconButton(selectAllSvg, 'segments-item-add', 'panel.segments.add-to');
                     addButton.dom.addEventListener('click', () => {
                         events.invoke('segments.assign', segment.layer, segment.name, segment.id);
+                    });
+
+                    // make this label the parent of the next one created
+                    const childButton = iconButton(selectAddSvg, 'segments-item-child', 'panel.segments.set-parent');
+                    childButton.dom.addEventListener('click', () => {
+                        layerInput.value = segment.layer;
+                        refreshParents();
+                        parentSelect.value = `${segment.id}`;
+                        nameInput.focus();
                     });
 
                     const selectButton = iconButton(tagSvg, 'segments-item-select', 'panel.segments.select');
@@ -207,13 +259,20 @@ class SegmentsPanel extends Container {
                     row.append(name);
                     row.append(count);
                     row.append(addButton);
+                    row.append(childButton);
                     row.append(selectButton);
                     row.append(deleteButton);
                     group.append(row);
-                });
+
+                    data.childrenOf(segment.id).forEach(child => addRow(child, depth + 1));
+                };
+
+                data.rootsOfLayer(layer).forEach(segment => addRow(segment, 0));
 
                 list.append(group);
             });
+
+            refreshParents();
         };
 
         // ---- actions ---------------------------------------------------------
@@ -224,7 +283,8 @@ class SegmentsPanel extends Container {
             if (!name) {
                 return;
             }
-            events.invoke('segments.assign', layer, name);
+            const parentId = parentSelect.value === '' ? null : parseInt(parentSelect.value, 10);
+            events.invoke('segments.assign', layer, name, undefined, parentId);
             nameInput.value = '';
         });
 

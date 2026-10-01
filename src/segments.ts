@@ -9,6 +9,11 @@ import { State } from './splat-state';
 // between them, and without a gaussian ever holding two conflicting values on
 // the same axis.
 //
+// Inside a layer the labels form a TREE: every label may name a parent label in
+// the same layer. Depth is unbounded, so a hierarchy is expressed by the parent
+// chain rather than by inventing one layer per level. A gaussian is tagged with
+// the deepest label that applies; its ancestors follow from the chain.
+//
 // Storage is one Int32Array per layer, indexed by SOURCE ROW (not instance
 // index): instance indices shift when gaussians are deleted, source rows do not.
 
@@ -27,20 +32,25 @@ type Segment = {
     name: string;
     layer: string;
     color: string;
+    // parent label within the same layer; null for a root label
+    parent: number | null;
 };
 
 type LabelHit = {
     layer: string;
     name: string;
     color: string;
+    // label names from the root of the layer down to this one
+    path: string[];
 };
 
 // The file format written by 'export' and accepted by 'import'.
 //   version 1  { segments: [{id, name}],     labels: [3, -1, ...] }
 //   version 2  { segments: [{id, partName}], labels: [3, -1, ...] }
 //   version 3  { segments: [{id, name, layer}], labels: [[3], [3, 7], [], ...] }
-// Versions 1 and 2 are read back into a single layer.
-const FILE_VERSION = 3;
+//   version 4  { parts:    [{id, name, layer, parent}], labels: [[3], [3, 7], [], ...] }
+// Versions 1 and 2 are read back into a single layer; 3 is read with parent = null.
+const FILE_VERSION = 4;
 
 class SplatSegments {
     artifactName = '';
@@ -90,17 +100,77 @@ class SplatSegments {
         return this.segments.find(s => s.layer === layer && s.name === name) ?? null;
     }
 
-    createSegment(layer: string, name: string, color?: string) {
+    createSegment(layer: string, name: string, parent: number | null = null, color?: string) {
         const used = new Set(this.segments.map(s => s.color));
+        // a parent must live in the same layer, otherwise the label becomes a root
+        const parentSegment = parent === null ? null : this.segmentById(parent);
         const segment: Segment = {
             id: this.nextId++,
             name,
             layer,
-            color: color ?? (PALETTE.find(c => !used.has(c)) ?? PALETTE[this.segments.length % PALETTE.length])
+            color: color ?? (PALETTE.find(c => !used.has(c)) ?? PALETTE[this.segments.length % PALETTE.length]),
+            parent: (parentSegment && parentSegment.layer === layer) ? parentSegment.id : null
         };
         this.segments.push(segment);
         this.rows(layer);
         return segment;
+    }
+
+    // ---- tree ----------------------------------------------------------
+
+    childrenOf(id: number | null) {
+        return this.segments.filter(s => s.parent === id);
+    }
+
+    rootsOfLayer(layer: string) {
+        return this.segments.filter(s => s.layer === layer && s.parent === null);
+    }
+
+    // this segment and everything below it
+    descendantsOf(id: number): number[] {
+        const out: number[] = [id];
+        for (let i = 0; i < out.length; ++i) {
+            this.childrenOf(out[i]).forEach(c => out.push(c.id));
+        }
+        return out;
+    }
+
+    // root -> ... -> this segment
+    pathOf(id: number): Segment[] {
+        const out: Segment[] = [];
+        let cursor = this.segmentById(id);
+        const guard = new Set<number>();
+        while (cursor && !guard.has(cursor.id)) {
+            guard.add(cursor.id);
+            out.unshift(cursor);
+            cursor = cursor.parent === null ? null : this.segmentById(cursor.parent);
+        }
+        return out;
+    }
+
+    depthOf(id: number) {
+        return this.pathOf(id).length - 1;
+    }
+
+    // re-parent, refusing a move that would form a cycle or cross layers
+    setParent(id: number, parent: number | null) {
+        const segment = this.segmentById(id);
+        if (!segment) {
+            return false;
+        }
+        if (parent === null) {
+            segment.parent = null;
+            return true;
+        }
+        const target = this.segmentById(parent);
+        if (!target || target.layer !== segment.layer || target.id === segment.id) {
+            return false;
+        }
+        if (this.descendantsOf(id).includes(target.id)) {
+            return false;
+        }
+        segment.parent = target.id;
+        return true;
     }
 
     renameSegment(id: number, name: string) {
@@ -122,6 +192,10 @@ class SplatSegments {
                 rows[i] = NO_LABEL;
             }
         }
+        // keep the tree connected: the children move up to the deleted parent
+        this.childrenOf(id).forEach((c) => {
+            c.parent = segment.parent;
+        });
         this.segments = this.segments.filter(s => s.id !== id);
 
         // drop the layer once its last segment is gone
@@ -132,7 +206,7 @@ class SplatSegments {
     }
 
     deleteLayer(layer: string) {
-        this.segmentsOfLayer(layer).forEach(s => {
+        this.segmentsOfLayer(layer).forEach((s) => {
             this.segments = this.segments.filter(x => x.id !== s.id);
         });
         this.rowsByLayer.delete(layer);
@@ -162,7 +236,12 @@ class SplatSegments {
             if (id !== NO_LABEL) {
                 const segment = this.segmentById(id);
                 if (segment) {
-                    result.push({ layer, name: segment.name, color: segment.color });
+                    result.push({
+                        layer,
+                        name: segment.name,
+                        color: segment.color,
+                        path: this.pathOf(id).map(s => s.name)
+                    });
                 }
             }
         });
@@ -221,7 +300,7 @@ const registerSegmentEvents = (events: Events) => {
     });
 
     // assign the currently selected gaussians to a segment, creating it if needed
-    events.function('segments.assign', (layer: string, name: string, segmentId?: number) => {
+    events.function('segments.assign', (layer: string, name: string, segmentId?: number, parentId?: number | null) => {
         const splat = selected();
         const data = dataOf(splat);
         if (!splat || !data || !name.trim()) {
@@ -230,7 +309,8 @@ const registerSegmentEvents = (events: Events) => {
 
         const segment = (segmentId !== undefined && segmentId !== null) ?
             data.segmentById(segmentId) :
-            (data.findSegment(layer, name.trim()) ?? data.createSegment(layer, name.trim()));
+            (data.findSegment(layer, name.trim()) ??
+             data.createSegment(layer, name.trim(), parentId ?? null));
 
         if (!segment) {
             return null;
@@ -280,13 +360,20 @@ const registerSegmentEvents = (events: Events) => {
             return;
         }
         const rows = data.rows(segment.layer);
+        // selecting a label selects everything below it in the tree as well
+        const wanted = new Set(data.descendantsOf(segment.id));
         const { instances } = splat;
         const { sourceRow } = instances;
         const mask = new Uint8Array(instances.count);
         for (let i = 0; i < instances.count; ++i) {
-            mask[i] = rows[sourceRow[i]] === segment.id ? 255 : 0;
+            mask[i] = wanted.has(rows[sourceRow[i]]) ? 255 : 0;
         }
         events.fire('select.mask', 'set', mask);
+    });
+
+    events.on('segments.setParent', (segmentId: number, parentId: number | null) => {
+        dataOf(selected())?.setParent(segmentId, parentId);
+        changed();
     });
 
     events.on('segments.rename', (segmentId: number, name: string) => {
@@ -354,7 +441,7 @@ const registerSegmentEvents = (events: Events) => {
             numGaussians: numRows,
             layers: data.layers.slice(),
             parts: data.segments.map(s => ({
-                id: s.id, name: s.name, layer: s.layer, color: s.color
+                id: s.id, parent: s.parent, name: s.name, layer: s.layer, color: s.color
             })),
             labels
         };
@@ -380,12 +467,13 @@ const registerSegmentEvents = (events: Events) => {
         data.artifactName = typeof name === 'string' ? name.trim() : '';
         data.artifactId = typeof id === 'string' ? id.trim() : '';
 
-        // v1 used `name`, v2 used `partName`, v3 adds `layer`
+        // v1 used `name`, v2 used `partName`, v3 adds `layer`, v4 adds `parent`
         const incoming: Segment[] = ((doc.parts ?? doc.segments) ?? []).map((s: any, i: number) => ({
             id: typeof s.id === 'number' ? s.id : i,
             name: s.name ?? s.partName ?? `segment ${i}`,
             layer: s.layer ?? DEFAULT_LAYER,
-            color: s.color ?? PALETTE[i % PALETTE.length]
+            color: s.color ?? PALETTE[i % PALETTE.length],
+            parent: typeof s.parent === 'number' ? s.parent : null
         }));
         data.segments = incoming;
         incoming.forEach(s => data.rows(s.layer));

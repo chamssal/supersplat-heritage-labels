@@ -222,3 +222,21 @@
         display: none;
     }
 }
+
+// parent picker + tree indentation
+#segments-panel {
+    .segments-parent-select {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .segments-item {
+        // the indent is set per row from the label's depth
+        box-sizing: border-box;
+    }
+
+    .segments-item-child svg {
+        width: 14px;
+        height: 14px;
+    }
+}
