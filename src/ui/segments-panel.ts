@@ -6,7 +6,7 @@ import { i18n } from './localization';
 import deleteSvg from './svg/delete.svg';
 import exportSvg from './svg/export.svg';
 import importSvg from './svg/import.svg';
-import selectAddSvg from './svg/select-add.svg';
+import newSvg from './svg/new.svg';
 import selectAllSvg from './svg/select-all.svg';
 import tagSvg from './svg/tag.svg';
 import { Tooltips } from './tooltips';
@@ -21,7 +21,12 @@ const iconButton = (svg: string, className: string, ariaKey: string) => {
     button.dom.appendChild(createSvg(svg));
     button.dom.setAttribute('role', 'button');
     button.dom.setAttribute('tabindex', '0');
-    i18n.onChange(() => button.dom.setAttribute('aria-label', i18n.t(ariaKey)), button);
+    i18n.onChange(() => {
+        const text = i18n.t(ariaKey);
+        button.dom.setAttribute('aria-label', text);
+        // native tooltip: the four row buttons look alike, so hovering must explain them
+        button.dom.setAttribute('title', text);
+    }, button);
     return button;
 };
 
@@ -110,7 +115,13 @@ class SegmentsPanel extends Container {
         const parentRow = new Container({ class: 'segments-row' });
         const parentLabel = new Label({ class: 'segments-field-label' });
         i18n.bindText(parentLabel, 'panel.segments.parent');
-        const parentSelect = new SelectInput({ class: 'segments-parent-select', value: '' });
+        const NO_PARENT = 'none';
+        const parentSelect = new SelectInput({
+            class: 'segments-parent-select',
+            defaultValue: NO_PARENT,
+            // pcui needs at least one option at construction or it renders blank
+            options: [{ v: NO_PARENT, t: '—' }]
+        });
         parentRow.append(parentLabel);
         parentRow.append(parentSelect);
 
@@ -119,7 +130,7 @@ class SegmentsPanel extends Container {
         const refreshParents = () => {
             const data = events.invoke('segments.data') as SplatSegments;
             const layer = (layerInput.value ?? '').trim() || DEFAULT_LAYER;
-            const options = [{ v: '', t: i18n.t('panel.segments.no-parent') }];
+            const options = [{ v: NO_PARENT, t: i18n.t('panel.segments.no-parent') }];
             if (data) {
                 data.segmentsOfLayer(layer).forEach((segment) => {
                     options.push({
@@ -130,7 +141,7 @@ class SegmentsPanel extends Container {
             }
             const previous = parentSelect.value;
             parentSelect.options = options;
-            parentSelect.value = options.some(o => o.v === previous) ? previous : '';
+            parentSelect.value = options.some(o => o.v === previous) ? previous : NO_PARENT;
         };
 
         layerInput.on('change', refreshParents);
@@ -237,7 +248,7 @@ class SegmentsPanel extends Container {
                     });
 
                     // make this label the parent of the next one created
-                    const childButton = iconButton(selectAddSvg, 'segments-item-child', 'panel.segments.set-parent');
+                    const childButton = iconButton(newSvg, 'segments-item-child', 'panel.segments.set-parent');
                     childButton.dom.addEventListener('click', () => {
                         layerInput.value = segment.layer;
                         refreshParents();
@@ -283,7 +294,8 @@ class SegmentsPanel extends Container {
             if (!name) {
                 return;
             }
-            const parentId = parentSelect.value === '' ? null : parseInt(parentSelect.value, 10);
+            const parentId = (!parentSelect.value || parentSelect.value === NO_PARENT) ?
+                null : parseInt(parentSelect.value, 10);
             events.invoke('segments.assign', layer, name, undefined, parentId);
             nameInput.value = '';
         });
