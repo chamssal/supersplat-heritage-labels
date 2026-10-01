@@ -406,6 +406,7 @@
     "panel.segments.import": "Import",
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Excluir toda esta camada",
+    "panel.segments.base-layer": "(base)",
     "panel.segments.delete": "Excluir este rótulo",
     "panel.segments.select": "Selecionar gaussianas deste rótulo",
     "panel.segments.add-to": "Adicionar gaussianas selecionadas a este rótulo",

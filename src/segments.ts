@@ -52,6 +52,10 @@ type LabelHit = {
 // Versions 1 and 2 are read back into a single layer; 3 is read with parent = null.
 const FILE_VERSION = 4;
 
+// 주관사 「ROI 저작 정보」 format version carried in every exported file
+const ROI_FORMAT_VERSION = '1.0';
+const MODEL_VERSION = '1.0';
+
 class SplatSegments {
     artifactName = '';
     artifactId = '';
@@ -410,42 +414,130 @@ const registerSegmentEvents = (events: Events) => {
 
     // ---- file format -------------------------------------------------------
 
+    // The base layer is the first one created. It carries the part hierarchy and
+    // every other layer references it: a damage ROI records which base-layer
+    // objects its gaussians sit on.
+    const baseLayerOf = (data: SplatSegments) => data.layers[0] ?? DEFAULT_LAYER;
+
+    // One document per layer. The base layer keeps the hierarchy format; the
+    // others are written as ROIs (주관사 "ROI 저작 정보" v1.0).
+    const serializeLayer = (splat: Splat, data: SplatSegments, layer: string) => {
+        const order = plyRowOrder(splat);
+        const toFile = (row: number) => (order ? order[row] : row);
+        const numRows = data.numRows;
+        const rows = data.rows(layer);
+
+        if (layer === baseLayerOf(data)) {
+            // one label id per gaussian, in PLY file order
+            const labels: number[] = new Array(numRows).fill(NO_LABEL);
+            for (let row = 0; row < numRows; ++row) {
+                labels[toFile(row)] = rows[row];
+            }
+            return {
+                Format_Version: ROI_FORMAT_VERSION,
+                version: FILE_VERSION,
+                HeritageName: data.artifactName,
+                HeritageId: data.artifactId,
+                numGaussians: numRows,
+                layer,
+                parts: data.segmentsOfLayer(layer).map(s => ({
+                    id: s.id, parent: s.parent, name: s.name, color: s.color
+                })),
+                labels
+            };
+        }
+
+        const baseRows = data.rows(baseLayerOf(data));
+        const rois = data.segmentsOfLayer(layer).map((segment) => {
+            const gaussians: number[] = [];
+            const objects = new Set<number>();
+            for (let row = 0; row < numRows; ++row) {
+                if (rows[row] === segment.id) {
+                    gaussians.push(toFile(row));
+                    if (baseRows[row] !== NO_LABEL) {
+                        objects.add(baseRows[row]);
+                    }
+                }
+            }
+            gaussians.sort((a, b) => a - b);
+            return {
+                ROI_ID: segment.id,
+                Name: segment.name,
+                Object_Indices: [...objects].sort((a, b) => a - b),
+                Gaussian_Indices: gaussians,
+                Text: ''
+            };
+        });
+
+        return {
+            Format_Version: ROI_FORMAT_VERSION,
+            Model: { Model_ID: data.artifactId, Model_Version: MODEL_VERSION },
+            HeritageName: data.artifactName,
+            numGaussians: numRows,
+            Layer: layer,
+            Base_Layer: baseLayerOf(data),
+            ROIs: rois
+        };
+    };
+
+    // [{ layer, base, doc }] — one entry per layer, for the export button
+    events.function('segments.serializeAll', () => {
+        const splat = selected();
+        const data = dataOf(splat);
+        if (!splat || !data || data.layers.length === 0) {
+            return null;
+        }
+        const base = baseLayerOf(data);
+        return data.layers.map(layer => ({
+            layer,
+            base: layer === base,
+            doc: serializeLayer(splat, data, layer)
+        }));
+    });
+
+    // kept for callers that still want a single combined document
     events.function('segments.serialize', () => {
         const splat = selected();
         const data = dataOf(splat);
         if (!splat || !data) {
             return null;
         }
-
-        const order = plyRowOrder(splat);
-        const numRows = data.numRows;
-        const labels: number[][] = new Array(numRows);
-        for (let i = 0; i < numRows; ++i) {
-            labels[i] = [];
-        }
-        data.layers.forEach((layer) => {
-            const rows = data.rows(layer);
-            for (let row = 0; row < numRows; ++row) {
-                const id = rows[row];
-                if (id !== NO_LABEL) {
-                    labels[order ? order[row] : row].push(id);
-                }
-            }
-        });
-        labels.forEach(l => l.sort((a, b) => a - b));
-
-        return {
-            version: FILE_VERSION,
-            HeritageName: data.artifactName,
-            HeritageId: data.artifactId,
-            numGaussians: numRows,
-            layers: data.layers.slice(),
-            parts: data.segments.map(s => ({
-                id: s.id, parent: s.parent, name: s.name, layer: s.layer, color: s.color
-            })),
-            labels
-        };
+        return serializeLayer(splat, data, baseLayerOf(data));
     });
+
+    // ---- import ------------------------------------------------------------
+
+    // replace one layer without touching the others
+    const dropLayer = (data: SplatSegments, layer: string) => {
+        if (data.hasLayer(layer)) {
+            data.deleteLayer(layer);
+        }
+    };
+
+    const adoptParts = (data: SplatSegments, layer: string, parts: any[]) => {
+        const incoming: Segment[] = parts.map((s: any, i: number) => ({
+            id: typeof s.id === 'number' ? s.id : i,
+            name: s.name ?? s.partName ?? s.Name ?? `label ${i}`,
+            layer,
+            color: s.color ?? PALETTE[i % PALETTE.length],
+            parent: typeof s.parent === 'number' ? s.parent : null
+        }));
+        data.segments = data.segments.concat(incoming);
+        data.rows(layer);
+        data.adoptIds();
+        return incoming;
+    };
+
+    const readIdentity = (data: SplatSegments, doc: any) => {
+        const name = doc.HeritageName ?? doc.artifactName;
+        const id = doc.HeritageId ?? doc.Model?.Model_ID ?? doc.artifactId;
+        if (typeof name === 'string' && name.trim()) {
+            data.artifactName = name.trim();
+        }
+        if (typeof id === 'string' && id.trim()) {
+            data.artifactId = id.trim();
+        }
+    };
 
     events.function('segments.deserialize', (doc: any) => {
         const splat = selected();
@@ -453,19 +545,66 @@ const registerSegmentEvents = (events: Events) => {
         if (!splat || !data) {
             return 'no-splat';
         }
-        if (!doc || !Array.isArray(doc.labels)) {
+        if (!doc || typeof doc !== 'object') {
+            return 'bad-format';
+        }
+
+        const order = plyRowOrder(splat);
+        const toFile = (row: number) => (order ? order[row] : row);
+
+        // ---- ROI file: one layer of flat labels, no hierarchy ----
+        if (Array.isArray(doc.ROIs)) {
+            if (typeof doc.numGaussians === 'number' && doc.numGaussians !== data.numRows) {
+                return 'count-mismatch';
+            }
+            const layer = typeof doc.Layer === 'string' && doc.Layer ? doc.Layer : DEFAULT_LAYER;
+            readIdentity(data, doc);
+            dropLayer(data, layer);
+            adoptParts(data, layer, doc.ROIs.map((r: any) => ({
+                id: r.ROI_ID, name: r.Name, color: r.color
+            })));
+            const rows = data.rows(layer);
+            doc.ROIs.forEach((roi: any) => {
+                const fileIndices: number[] = Array.isArray(roi.Gaussian_Indices) ? roi.Gaussian_Indices : [];
+                const wanted = new Set(fileIndices);
+                for (let row = 0; row < data.numRows; ++row) {
+                    if (wanted.has(toFile(row))) {
+                        rows[row] = roi.ROI_ID;
+                    }
+                }
+            });
+            activeLayer = layer;
+            changed();
+            return 'ok';
+        }
+
+        if (!Array.isArray(doc.labels)) {
             return 'bad-format';
         }
         if (doc.labels.length !== data.numRows) {
             return 'count-mismatch';
         }
 
+        // ---- single-layer hierarchy file ----
+        if (typeof doc.layer === 'string' && doc.layer) {
+            const layer = doc.layer;
+            readIdentity(data, doc);
+            dropLayer(data, layer);
+            adoptParts(data, layer, doc.parts ?? []);
+            const rows = data.rows(layer);
+            for (let row = 0; row < data.numRows; ++row) {
+                const value = doc.labels[toFile(row)];
+                const id = Array.isArray(value) ? (value[0] ?? NO_LABEL) : value;
+                rows[row] = (typeof id === 'number' && data.segmentById(id)) ? id : NO_LABEL;
+            }
+            activeLayer = layer;
+            changed();
+            return 'ok';
+        }
+
+        // ---- combined file (v1-v4): replaces the whole document ----
         data.clear();
-        // v3 writes HeritageName/HeritageId/parts; older files used artifactName/artifactId/segments
-        const name = doc.HeritageName ?? doc.artifactName;
-        const id = doc.HeritageId ?? doc.artifactId;
-        data.artifactName = typeof name === 'string' ? name.trim() : '';
-        data.artifactId = typeof id === 'string' ? id.trim() : '';
+        readIdentity(data, doc);
 
         // v1 used `name`, v2 used `partName`, v3 adds `layer`, v4 adds `parent`
         const incoming: Segment[] = ((doc.parts ?? doc.segments) ?? []).map((s: any, i: number) => ({
@@ -479,9 +618,8 @@ const registerSegmentEvents = (events: Events) => {
         incoming.forEach(s => data.rows(s.layer));
         data.adoptIds();
 
-        const order = plyRowOrder(splat);
         for (let row = 0; row < data.numRows; ++row) {
-            const value = doc.labels[order ? order[row] : row];
+            const value = doc.labels[toFile(row)];
             const ids: number[] = Array.isArray(value) ? value : (value === NO_LABEL ? [] : [value]);
             ids.forEach((id) => {
                 const segment = data.segmentById(id);

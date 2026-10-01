@@ -406,6 +406,7 @@
     "panel.segments.import": "Import",
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Delete this whole layer",
+    "panel.segments.base-layer": "(base)",
     "panel.segments.delete": "Delete this label",
     "panel.segments.select": "Select gaussians of this label",
     "panel.segments.add-to": "Add selected gaussians to this label",

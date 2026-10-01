@@ -204,7 +204,12 @@ class SegmentsPanel extends Container {
                 const group = new Container({ class: 'segments-group' });
 
                 const groupHeader = new Container({ class: 'segments-group-header' });
-                const groupName = new Label({ class: 'segments-group-name', text: layer });
+                // the first layer is the base: the other layers reference its labels
+                const isBase = data.layers[0] === layer;
+                const groupName = new Label({
+                    class: 'segments-group-name',
+                    text: isBase ? `${layer}  ${i18n.t('panel.segments.base-layer')}` : layer
+                });
                 const groupCount = new Label({
                     class: 'segments-group-count',
                     text: `${data.segmentsOfLayer(layer).length}`
@@ -302,48 +307,75 @@ class SegmentsPanel extends Container {
 
         clearButton.on('click', () => events.fire('segments.clearSelected'));
 
-        exportButton.on('click', () => {
-            const doc = events.invoke('segments.serialize');
-            if (!doc) {
-                return;
-            }
-            const base = (doc.HeritageId || doc.HeritageName || 'labels').trim().replace(/[^\w.-]+/g, '_');
+        const sanitize = (value: string) => value.trim().replace(/[^\w.-]+/g, '_');
+
+        const download = (doc: any, filename: string) => {
             const blob = new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' });
             const url = window.URL.createObjectURL(blob);
             const anchor = document.createElement('a');
-            anchor.download = `${base}.labels.json`;
+            anchor.download = filename;
             anchor.href = url;
             anchor.click();
             window.URL.revokeObjectURL(url);
+        };
+
+        // one file per layer: the base layer keeps the hierarchy, the others are
+        // written as ROIs that reference it
+        exportButton.on('click', async () => {
+            const entries = events.invoke('segments.serializeAll') as
+                { layer: string, base: boolean, doc: any }[];
+            if (!entries || entries.length === 0) {
+                return;
+            }
+            const artifact = sanitize(
+                (entries[0].doc.HeritageId || entries[0].doc.HeritageName || 'labels') as string
+            );
+            for (let i = 0; i < entries.length; ++i) {
+                const { layer, base, doc } = entries[i];
+                const suffix = base ? 'labels' : 'roi';
+                download(doc, `${artifact}_${sanitize(layer)}.${suffix}.json`);
+                // browsers drop downloads fired in the same tick
+                if (i < entries.length - 1) {
+                    await new Promise((resolve) => {
+                        setTimeout(resolve, 350);
+                    });
+                }
+            }
         });
 
         importButton.on('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
             input.accept = '.json,application/json';
+            // several layer files can be picked at once; each one replaces its layer
+            input.multiple = true;
             input.onchange = async () => {
-                const file = input.files?.[0];
-                if (!file) {
+                const files = Array.from(input.files ?? []);
+                if (files.length === 0) {
                     return;
                 }
-                let doc;
-                try {
-                    doc = JSON.parse(await file.text());
-                } catch (error) {
-                    await events.invoke('showPopup', {
-                        type: 'error',
-                        header: i18n.t('popup.error'),
-                        message: i18n.t('panel.segments.import-parse-error')
-                    });
-                    return;
-                }
-                const result = events.invoke('segments.deserialize', doc);
-                if (result !== 'ok') {
-                    await events.invoke('showPopup', {
-                        type: 'error',
-                        header: i18n.t('popup.error'),
-                        message: i18n.t(`panel.segments.import-${result}`)
-                    });
+                // the base layer must land first so the ROI files can reference it
+                files.sort((a, b) => Number(b.name.includes('.labels.')) - Number(a.name.includes('.labels.')));
+                for (const file of files) {
+                    let doc;
+                    try {
+                        doc = JSON.parse(await file.text());
+                    } catch (error) {
+                        await events.invoke('showPopup', {
+                            type: 'error',
+                            header: i18n.t('popup.error'),
+                            message: `${file.name}: ${i18n.t('panel.segments.import-parse-error')}`
+                        });
+                        continue;
+                    }
+                    const result = events.invoke('segments.deserialize', doc);
+                    if (result !== 'ok') {
+                        await events.invoke('showPopup', {
+                            type: 'error',
+                            header: i18n.t('popup.error'),
+                            message: `${file.name}: ${i18n.t(`panel.segments.import-${result}`)}`
+                        });
+                    }
                 }
             };
             input.click();

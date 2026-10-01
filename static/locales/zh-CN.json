@@ -406,6 +406,7 @@
     "panel.segments.import": "Import",
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "删除整个图层",
+    "panel.segments.base-layer": "(基准)",
     "panel.segments.delete": "删除此标签",
     "panel.segments.select": "选择此标签的高斯",
     "panel.segments.add-to": "将所选高斯添加到此标签",

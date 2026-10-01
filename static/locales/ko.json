@@ -406,6 +406,7 @@
     "panel.segments.import": "가져오기",
     "panel.segments.export": "내보내기",
     "panel.segments.delete-layer": "이 레이어 전체 삭제",
+    "panel.segments.base-layer": "(기준)",
     "panel.segments.delete": "이 라벨 삭제",
     "panel.segments.select": "이 라벨의 가우시안 선택",
     "panel.segments.add-to": "선택한 가우시안을 이 라벨에 추가",

@@ -406,6 +406,7 @@
     "panel.segments.import": "Import",
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Eliminar toda esta capa",
+    "panel.segments.base-layer": "(base)",
     "panel.segments.delete": "Eliminar esta etiqueta",
     "panel.segments.select": "Seleccionar gaussianas de esta etiqueta",
     "panel.segments.add-to": "Añadir gaussianas seleccionadas a esta etiqueta",
