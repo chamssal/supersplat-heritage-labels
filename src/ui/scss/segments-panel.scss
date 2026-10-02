@@ -53,6 +53,11 @@
 
     .segments-list {
         margin: 0 8px;
+        // the tree grows without bound; scroll it on its own so the assign row
+        // and the footer buttons stay reachable
+        max-height: 42vh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
 
     .segments-group {
@@ -90,6 +95,8 @@
         align-items: center;
         gap: 4px;
         padding: 2px 4px 2px 6px;
+        // a deep row must not push its buttons outside the panel
+        overflow: hidden;
     }
 
     .segments-swatch {
@@ -101,7 +108,8 @@
 
     .segments-item-name {
         flex: 1 1 auto;
-        min-width: 0;
+        // never let the indent squeeze the name away entirely
+        min-width: 54px;
     }
 
     .segments-item-count {

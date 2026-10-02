@@ -100,8 +100,11 @@ class SplatSegments {
         return this.segments.filter(s => s.layer === layer);
     }
 
-    findSegment(layer: string, name: string) {
-        return this.segments.find(s => s.layer === layer && s.name === name) ?? null;
+    // A name is only unique among SIBLINGS: a pagoda repeats 갑석 and 탑신석 on
+    // every tier, so the same name under a different parent is a different Object.
+    findSegment(layer: string, name: string, parent: number | null = null) {
+        return this.segments.find(s => s.layer === layer && s.name === name && s.parent === parent
+        ) ?? null;
     }
 
     createSegment(layer: string, name: string, parent: number | null = null, color?: string) {
@@ -313,7 +316,7 @@ const registerSegmentEvents = (events: Events) => {
 
         const segment = (segmentId !== undefined && segmentId !== null) ?
             data.segmentById(segmentId) :
-            (data.findSegment(layer, name.trim()) ??
+            (data.findSegment(layer, name.trim(), parentId ?? null) ??
              data.createSegment(layer, name.trim(), parentId ?? null));
 
         if (!segment) {

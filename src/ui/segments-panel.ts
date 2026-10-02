@@ -262,12 +262,16 @@ class SegmentsPanel extends Container {
 
                 const addRow = (segment: Segment, depth: number) => {
                     const row = new Container({ class: 'segments-item' });
-                    row.dom.style.paddingLeft = `${depth * 14}px`;
+                    // the indent stops growing past a few levels, otherwise a deep
+                    // label has no room left for its name
+                    row.dom.style.paddingLeft = `${Math.min(depth, 5) * 12}px`;
 
                     const swatch = new Label({ class: 'segments-swatch' });
                     swatch.dom.style.backgroundColor = segment.color;
 
                     const name = new TextInput({ class: 'segments-item-name', value: segment.name });
+                    // the row is narrow when nested, so the full path lives in the tooltip
+                    name.dom.setAttribute('title', data.pathOf(segment.id).map(s => s.name).join(' › '));
                     name.on('change', (value: string) => {
                         if (value && value !== segment.name) {
                             events.fire('segments.rename', segment.id, value);
