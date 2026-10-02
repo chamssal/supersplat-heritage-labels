@@ -101,7 +101,7 @@ const registerPreferences = (events: Events, config: SceneConfig, urlArgs: any) 
         // live visibility flags are the ACTIVE footprint mode's profile, so
         // their defaults depend on the live footprint - which sits earlier in
         // this table and has already been applied when they are evaluated
-        { key: 'selection.useDepth', setCommand: 'selection.setUseDepth', getDefault: () => false, validate: isBool },
+        { key: 'selection.useDepth', setCommand: 'selection.setUseDepth', getDefault: () => true, validate: isBool },
         { key: 'selection.footprint', setCommand: 'selection.setFootprint', getDefault: () => 0, validate: isNumber(0, 1) },
         { key: 'view.gaussians', setCommand: 'view.setGaussians', getDefault: () => true, validate: isBool, group: 'appearance' },
         { key: 'view.centers', setCommand: 'view.setCenters', getDefault: () => (events.invoke('selection.footprint') as number) === 0, validate: isBool, group: 'appearance' },

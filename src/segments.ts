@@ -380,6 +380,38 @@ const registerSegmentEvents = (events: Events) => {
         changed();
     });
 
+    // select every gaussian that has (or lacks) a label on a layer. Used by the
+    // panel to find the parts still untouched, and to hide the finished ones so
+    // they cannot be painted over by accident.
+    const selectByLabelled = (layer: string | undefined, wantLabelled: boolean) => {
+        const splat = selected();
+        const data = dataOf(splat);
+        if (!splat || !data) {
+            return 0;
+        }
+        const target = layer || data.layers[0] || DEFAULT_LAYER;
+        if (!data.hasLayer(target)) {
+            return 0;
+        }
+        const rows = data.rows(target);
+        const { instances } = splat;
+        const { sourceRow } = instances;
+        const mask = new Uint8Array(instances.count);
+        let count = 0;
+        for (let i = 0; i < instances.count; ++i) {
+            const hit = rows[sourceRow[i]] !== NO_LABEL;
+            if (hit === wantLabelled) {
+                mask[i] = 255;
+                count++;
+            }
+        }
+        events.fire('select.mask', 'set', mask);
+        return count;
+    };
+
+    events.function('segments.selectUnlabelled', (layer?: string) => selectByLabelled(layer, false));
+    events.function('segments.selectLabelled', (layer?: string) => selectByLabelled(layer, true));
+
     events.on('segments.rename', (segmentId: number, name: string) => {
         dataOf(selected())?.renameSegment(segmentId, name);
         changed();

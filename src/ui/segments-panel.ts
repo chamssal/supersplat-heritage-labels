@@ -155,6 +155,43 @@ class SegmentsPanel extends Container {
 
         // ---- footer ----------------------------------------------------------
 
+        // ---- work helpers ---------------------------------------------------
+        // Painting a large model is mostly a problem of seeing what is left, so
+        // these three act on the whole layer rather than on one label.
+        const helpers = new Container({ class: 'segments-footer' });
+
+        const unlabelledButton = new Button({ class: 'segments-footer-button' });
+        i18n.bindText(unlabelledButton, 'panel.segments.select-unlabelled');
+        const hideDoneButton = new Button({ class: 'segments-footer-button' });
+        i18n.bindText(hideDoneButton, 'panel.segments.hide-done');
+        const showAllButton = new Button({ class: 'segments-footer-button' });
+        i18n.bindText(showAllButton, 'panel.segments.show-all');
+
+        helpers.append(unlabelledButton);
+        helpers.append(hideDoneButton);
+        helpers.append(showAllButton);
+
+        const currentLayer = () => (layerInput.value ?? '').trim() || undefined;
+
+        // what is still untouched on this layer
+        unlabelledButton.on('click', () => {
+            events.invoke('segments.selectUnlabelled', currentLayer());
+        });
+
+        // finished parts go out of the way: hidden gaussians cannot be picked,
+        // so the next part can be painted without eating into the previous one
+        hideDoneButton.on('click', () => {
+            const count = events.invoke('segments.selectLabelled', currentLayer()) as number;
+            if (count > 0) {
+                events.fire('select.hide');
+            }
+        });
+
+        showAllButton.on('click', () => {
+            events.fire('select.unhide');
+            events.fire('select.none');
+        });
+
         const footer = new Container({ class: 'segments-footer' });
         const clearButton = new Button({ class: 'segments-footer-button' });
         i18n.bindText(clearButton, 'panel.segments.clear-selected');
@@ -173,6 +210,7 @@ class SegmentsPanel extends Container {
         this.append(assignRow);
         this.append(parentRow);
         this.append(list);
+        this.append(helpers);
         this.append(footer);
         this.append(hint);
 
