@@ -394,6 +394,7 @@
     "panel.segments.artifact-name": "Artifact",
     "panel.segments.artifact-id": "Artifact ID",
     "panel.segments.selected": "Selected gaussians: {{count}}",
+    "panel.segments.deleted": "· 削除済み {{count}}",
     "panel.segments.no-layer": "Open a splat to start labelling.",
     "panel.segments.layer-placeholder": "layer",
     "panel.segments.name-placeholder": "label name",

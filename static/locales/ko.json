@@ -394,6 +394,7 @@
     "panel.segments.artifact-name": "유물명",
     "panel.segments.artifact-id": "유물 ID",
     "panel.segments.selected": "선택된 가우시안: {{count}}개",
+    "panel.segments.deleted": "· 삭제됨 {{count}}개",
     "panel.segments.no-layer": "스플랫을 먼저 열어주세요.",
     "panel.segments.layer-placeholder": "레이어",
     "panel.segments.name-placeholder": "라벨 이름",

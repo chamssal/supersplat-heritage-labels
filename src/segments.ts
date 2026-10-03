@@ -85,6 +85,12 @@ class SplatSegments {
 
     readonly numRows: number;
 
+    // Deleting gaussians removes them from the instance list but leaves their
+    // labels alone, so an undo can bring both back together. Everything that
+    // reports or writes a label must therefore ask whether the row is still in
+    // the scene. null means nothing has been deleted and every row is live.
+    liveRows: Uint8Array | null = null;
+
     constructor(numRows: number) {
         this.numRows = numRows;
     }
@@ -243,9 +249,10 @@ class SplatSegments {
             return 0;
         }
         const rows = this.rows(segment.layer);
+        const live = this.liveRows;
         let count = 0;
         for (let i = 0; i < rows.length; ++i) {
-            if (rows[i] === id) {
+            if (rows[i] === id && (!live || live[i] !== 0)) {
                 count++;
             }
         }
@@ -310,13 +317,36 @@ const registerSegmentEvents = (events: Events) => {
 
     const selected = () => events.invoke('selection') as Splat;
 
-    const changed = () => events.fire('segments.changed');
+    // which source rows are still instanced. Rebuilt whenever the scene changes
+    // so counts and exports follow a delete, and follow its undo just as well.
+    const refreshLive = (splat: Splat, data: SplatSegments) => {
+        const { instances } = splat;
+        if (instances.numRemoved === 0) {
+            data.liveRows = null;
+            return;
+        }
+        const live = new Uint8Array(data.numRows);
+        const { sourceRow } = instances;
+        for (let i = 0; i < instances.count; ++i) {
+            live[sourceRow[i]] = 1;
+        }
+        data.liveRows = live;
+    };
+
+    const changed = () => {
+        const splat = selected();
+        const data = splat ? dataOf(splat) : null;
+        if (splat && data) {
+            refreshLive(splat, data);
+        }
+        events.fire('segments.changed');
+    };
 
     events.function('segments.data', () => dataOf(selected()));
 
-    events.function('segments.activeLayer', () => activeLayer);
-
     let activeLayer = DEFAULT_LAYER;
+
+    events.function('segments.activeLayer', () => activeLayer);
 
     events.on('segments.setActiveLayer', (layer: string) => {
         activeLayer = layer || DEFAULT_LAYER;
@@ -485,12 +515,15 @@ const registerSegmentEvents = (events: Events) => {
         const toFile = (row: number) => (order ? order[row] : row);
         const numRows = data.numRows;
         const rows = data.rows(layer);
+        // a deleted gaussian is no longer part of the model, so it is written to
+        // no layer. Indices stay relative to the original PLY either way.
+        const live = data.liveRows;
 
         if (layer === baseLayerOf(data)) {
             // one label id per gaussian, in PLY file order
             const labels: number[] = new Array(numRows).fill(NO_LABEL);
             for (let row = 0; row < numRows; ++row) {
-                labels[toFile(row)] = rows[row];
+                labels[toFile(row)] = (live && live[row] === 0) ? NO_LABEL : rows[row];
             }
             return {
                 Format_Version: ROI_FORMAT_VERSION,
@@ -511,7 +544,7 @@ const registerSegmentEvents = (events: Events) => {
             const gaussians: number[] = [];
             const objects = new Set<number>();
             for (let row = 0; row < numRows; ++row) {
-                if (rows[row] === segment.id) {
+                if (rows[row] === segment.id && (!live || live[row] !== 0)) {
                     gaussians.push(toFile(row));
                     if (baseRows[row] !== NO_LABEL) {
                         objects.add(baseRows[row]);

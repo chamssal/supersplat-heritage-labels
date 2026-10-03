@@ -301,9 +301,15 @@ class SegmentsPanel extends Container {
             }
 
             const splat = events.invoke('selection');
+            const deleted = splat?.numDeleted ?? 0;
+            // deleted gaussians keep their label (so undo restores both) but stop
+            // counting and stop being exported: say so rather than let the counts
+            // look wrong
             status.text = i18n.t('panel.segments.selected', {
                 count: i18n.formatInteger(splat?.numSelected ?? 0)
-            });
+            }) + (deleted > 0 ?
+                `  ${i18n.t('panel.segments.deleted', { count: i18n.formatInteger(deleted) })}` :
+                '');
 
             data.layers.forEach((layer) => {
                 const group = new Container({ class: 'segments-group' });
