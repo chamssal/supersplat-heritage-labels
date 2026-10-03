@@ -1,3 +1,5 @@
+import { Color } from 'playcanvas';
+
 import { Events } from './events';
 import { PermutedChunkSource } from './io';
 import { Splat } from './splat';
@@ -24,6 +26,21 @@ const PALETTE = [
 ];
 
 const DEFAULT_LAYER = 'default';
+
+// '#rrggbb' -> engine Color, so the viewport highlight can take the colour the
+// panel shows next to the label
+const parseColor = (hex: string) => {
+    const value = parseInt((hex ?? '').replace('#', ''), 16);
+    if (!Number.isFinite(value)) {
+        return null;
+    }
+    return new Color(
+        ((value >> 16) & 0xff) / 255,
+        ((value >> 8) & 0xff) / 255,
+        (value & 0xff) / 255,
+        1
+    );
+};
 
 const NO_LABEL = -1;
 
@@ -366,6 +383,13 @@ const registerSegmentEvents = (events: Events) => {
         if (!splat || !segment) {
             return;
         }
+        // paint the viewport highlight in this label's own colour, so what is
+        // lit up on the model matches the swatch in the list
+        const colour = parseColor(segment.color);
+        if (colour) {
+            events.fire('setSelectedClr', colour);
+        }
+
         const rows = data.rows(segment.layer);
         // selecting a label selects everything below it in the tree as well
         const wanted = new Set(data.descendantsOf(segment.id));
