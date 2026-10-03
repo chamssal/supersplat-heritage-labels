@@ -37,6 +37,10 @@ const defaultShortcuts: Record<string, ShortcutBinding> = {
     'selection.toggleFootprint': { keys: ['m'] },
     'view.toggleEditView': { keys: ['Tab'] },
 
+    // Labels
+    // assign the current selection to the label highlighted in the segments panel
+    'segments.assignActive': { keys: ['x'] },
+
     // Tools
     // 1/2/3 don't fire tool.move/rotate/scale directly: while a shape
     // selection tool (box/sphere) is active they switch its gizmo mode

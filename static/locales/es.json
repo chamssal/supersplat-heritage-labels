@@ -413,6 +413,8 @@
     "panel.segments.delete": "Eliminar esta etiqueta",
     "panel.segments.select": "Seleccionar gaussianas de esta etiqueta",
     "panel.segments.add-to": "Añadir gaussianas seleccionadas a esta etiqueta",
+    "panel.segments.add-to-active": "Añadir selección (X)",
+    "panel.segments.active-none": "Haz clic en una etiqueta de la lista",
     "panel.segments.import-parse-error": "The file is not valid JSON.",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",

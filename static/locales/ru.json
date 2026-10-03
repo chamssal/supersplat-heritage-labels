@@ -413,6 +413,8 @@
     "panel.segments.delete": "Удалить эту метку",
     "panel.segments.select": "Выбрать гауссианы этой метки",
     "panel.segments.add-to": "Добавить выбранные гауссианы к этой метке",
+    "panel.segments.add-to-active": "Добавить выделение (X)",
+    "panel.segments.active-none": "Выберите метку в списке ниже",
     "panel.segments.import-parse-error": "The file is not valid JSON.",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",

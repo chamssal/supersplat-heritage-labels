@@ -7,7 +7,7 @@ import deleteSvg from './svg/delete.svg';
 import exportSvg from './svg/export.svg';
 import importSvg from './svg/import.svg';
 import newSvg from './svg/new.svg';
-import selectAllSvg from './svg/select-all.svg';
+import selectAddSvg from './svg/select-add.svg';
 import tagSvg from './svg/tag.svg';
 import { Tooltips } from './tooltips';
 
@@ -92,6 +92,21 @@ class SegmentsPanel extends Container {
 
         const status = new Label({ class: 'segments-status' });
 
+        // ---- the label being worked on --------------------------------------
+        // Adding to a label that already exists must not mean retyping its name:
+        // clicking a row in the list below makes it the active label, and this
+        // bar drops the current selection into it.
+        let activeId: number | null = null;
+
+        const activeRow = new Container({ class: 'segments-active-row' });
+        const activeSwatch = new Label({ class: 'segments-swatch' });
+        const activeName = new Label({ class: 'segments-active-name' });
+        const activeAdd = new Button({ class: 'segments-active-add' });
+        i18n.bindText(activeAdd, 'panel.segments.add-to-active');
+        activeRow.append(activeSwatch);
+        activeRow.append(activeName);
+        activeRow.append(activeAdd);
+
         // ---- assign new label ----------------------------------------------
 
         const assignRow = new Container({ class: 'segments-assign-row' });
@@ -132,12 +147,18 @@ class SegmentsPanel extends Container {
             const layer = (layerInput.value ?? '').trim() || DEFAULT_LAYER;
             const options = [{ v: NO_PARENT, t: i18n.t('panel.segments.no-parent') }];
             if (data) {
-                data.segmentsOfLayer(layer).forEach((segment) => {
+                // walk the tree so the menu reads in the same order as the list,
+                // and show each label by its own name indented by depth. The full
+                // path would put the shared prefix first and cut off the part that
+                // actually tells the entries apart.
+                const walk = (segment: Segment, depth: number) => {
                     options.push({
                         v: `${segment.id}`,
-                        t: data.pathOf(segment.id).map(s => s.name).join(' › ')
+                        t: `${'\u00a0\u00a0\u00a0'.repeat(depth)}${segment.name}`
                     });
-                });
+                    data.childrenOf(segment.id).forEach(child => walk(child, depth + 1));
+                };
+                data.rootsOfLayer(layer).forEach(segment => walk(segment, 0));
             }
             const previous = parentSelect.value;
             parentSelect.options = options;
@@ -207,12 +228,58 @@ class SegmentsPanel extends Container {
         this.append(artifactRow);
         this.append(artifactIdRow);
         this.append(status);
+        this.append(activeRow);
         this.append(assignRow);
         this.append(parentRow);
         this.append(list);
         this.append(helpers);
         this.append(footer);
         this.append(hint);
+
+        // ---- the active label -------------------------------------------------
+
+        const refreshActive = () => {
+            const data = events.invoke('segments.data') as SplatSegments;
+            const segment = (data && activeId !== null) ? data.segmentById(activeId) : null;
+            if (!segment) {
+                activeId = null;
+                activeSwatch.dom.style.backgroundColor = 'transparent';
+                activeName.text = i18n.t('panel.segments.active-none');
+                activeName.class.add('segments-active-empty');
+                activeName.dom.removeAttribute('title');
+                activeAdd.enabled = false;
+                return;
+            }
+            const path = data.pathOf(segment.id).map(s => s.name).join(' \u203a ');
+            activeSwatch.dom.style.backgroundColor = segment.color;
+            activeName.text = path;
+            activeName.dom.setAttribute('title', `${segment.layer}: ${path}`);
+            activeName.class.remove('segments-active-empty');
+            activeAdd.enabled = true;
+        };
+
+        const setActive = (id: number | null) => {
+            activeId = id;
+            refreshActive();
+            // repaint the highlight in place: a full rebuild would blow away the
+            // text cursor if the click landed in a name field
+            list.dom.querySelectorAll('.segments-item.active').forEach(el => el.classList.remove('active'));
+            if (id !== null) {
+                list.dom.querySelector(`.segments-item[data-segment-id="${id}"]`)?.classList.add('active');
+            }
+        };
+
+        const assignToActive = () => {
+            const data = events.invoke('segments.data') as SplatSegments;
+            const segment = (data && activeId !== null) ? data.segmentById(activeId) : null;
+            if (!segment) {
+                return;
+            }
+            events.invoke('segments.assign', segment.layer, segment.name, segment.id);
+        };
+
+        activeAdd.on('click', assignToActive);
+        events.on('segments.assignActive', assignToActive);
 
         // ---- rendering the list ----------------------------------------------
 
@@ -264,7 +331,20 @@ class SegmentsPanel extends Container {
                     const row = new Container({ class: 'segments-item' });
                     // the indent stops growing past a few levels, otherwise a deep
                     // label has no room left for its name
-                    row.dom.style.paddingLeft = `${Math.min(depth, 5) * 12}px`;
+                    row.dom.style.paddingLeft = `${Math.min(depth, 4) * 10}px`;
+                    row.dom.dataset.segmentId = `${segment.id}`;
+                    if (segment.id === activeId) {
+                        row.dom.classList.add('active');
+                    }
+                    // clicking anywhere on the row makes it the label being worked
+                    // on. Focus is dropped unless the click was meant for the name
+                    // field, so the keyboard shortcut keeps working afterwards.
+                    row.dom.addEventListener('pointerdown', (e: PointerEvent) => {
+                        setActive(segment.id);
+                        if (!(e.target instanceof HTMLInputElement)) {
+                            (document.activeElement as HTMLElement)?.blur?.();
+                        }
+                    });
 
                     const swatch = new Label({ class: 'segments-swatch' });
                     swatch.dom.style.backgroundColor = segment.color;
@@ -289,7 +369,7 @@ class SegmentsPanel extends Container {
                             `${i18n.formatInteger(own)} / ${i18n.formatInteger(total)}`
                     });
 
-                    const addButton = iconButton(selectAllSvg, 'segments-item-add', 'panel.segments.add-to');
+                    const addButton = iconButton(selectAddSvg, 'segments-item-add', 'panel.segments.add-to');
                     addButton.dom.addEventListener('click', () => {
                         events.invoke('segments.assign', segment.layer, segment.name, segment.id);
                     });
@@ -331,6 +411,7 @@ class SegmentsPanel extends Container {
             });
 
             refreshParents();
+            refreshActive();
         };
 
         // ---- actions ---------------------------------------------------------
@@ -343,8 +424,13 @@ class SegmentsPanel extends Container {
             }
             const parentId = (!parentSelect.value || parentSelect.value === NO_PARENT) ?
                 null : parseInt(parentSelect.value, 10);
-            events.invoke('segments.assign', layer, name, undefined, parentId);
+            const result = events.invoke('segments.assign', layer, name, undefined, parentId) as
+                { segment: Segment } | null;
             nameInput.value = '';
+            // a label just created is almost always the next one to be painted
+            if (result?.segment) {
+                setActive(result.segment.id);
+            }
         });
 
         clearButton.on('click', () => events.fire('segments.clearSelected'));

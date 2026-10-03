@@ -1,7 +1,8 @@
 @use 'colors.scss' as *;
 
 #segments-panel {
-    width: 300px;
+    // wide enough that a deeply nested row still shows its buttons
+    width: 344px;
     max-height: calc(100% - 100px);
     overflow-y: auto;
 
@@ -21,6 +22,37 @@
     .segments-text {
         flex: 1 1 auto;
         min-width: 0;
+    }
+
+    .segments-active-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin: 0 8px 6px 8px;
+        padding: 5px 6px;
+        border: 1px solid $bcg-darker;
+        border-radius: 3px;
+    }
+
+    .segments-active-name {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: 12px;
+        font-weight: 600;
+        color: $text-primary;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .segments-active-empty {
+        font-weight: 400;
+        color: $text-secondary;
+    }
+
+    .segments-active-add {
+        flex: 0 0 auto;
+        white-space: nowrap;
     }
 
     .segments-status {
@@ -56,11 +88,15 @@
         // the tree grows without bound; scroll it on its own so the assign row
         // and the footer buttons stay reachable
         max-height: 42vh;
+        // the row shrinks its name field instead of overflowing, so only the
+        // vertical axis ever scrolls
+        overflow-x: hidden;
         overflow-y: auto;
         overscroll-behavior: contain;
     }
 
     .segments-group {
+        min-width: 0;
         margin-bottom: 8px;
         border: 1px solid $bcg-darker;
         border-radius: 3px;
@@ -95,8 +131,16 @@
         align-items: center;
         gap: 4px;
         padding: 2px 4px 2px 6px;
-        // a deep row must not push its buttons outside the panel
-        overflow: hidden;
+        // the four row buttons are fixed width and must always be reachable, so
+        // the name field is what gives way when the row is indented
+        min-width: 0;
+        border-radius: 2px;
+        cursor: pointer;
+
+        &.active {
+            background-color: $bcg-darker;
+            box-shadow: inset 2px 0 0 $clr-hilight;
+        }
     }
 
     .segments-swatch {
@@ -107,9 +151,8 @@
     }
 
     .segments-item-name {
-        flex: 1 1 auto;
-        // never let the indent squeeze the name away entirely
-        min-width: 54px;
+        flex: 1 1 0;
+        min-width: 0;
     }
 
     .segments-item-count {

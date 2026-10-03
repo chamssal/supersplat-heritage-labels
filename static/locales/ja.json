@@ -413,6 +413,8 @@
     "panel.segments.delete": "このラベルを削除",
     "panel.segments.select": "このラベルのガウシアンを選択",
     "panel.segments.add-to": "選択したガウシアンをこのラベルに追加",
+    "panel.segments.add-to-active": "選択範囲を追加 (X)",
+    "panel.segments.active-none": "下のリストでラベルをクリック",
     "panel.segments.import-parse-error": "The file is not valid JSON.",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",

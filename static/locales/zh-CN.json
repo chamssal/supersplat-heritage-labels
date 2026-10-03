@@ -413,6 +413,8 @@
     "panel.segments.delete": "删除此标签",
     "panel.segments.select": "选择此标签的高斯",
     "panel.segments.add-to": "将所选高斯添加到此标签",
+    "panel.segments.add-to-active": "添加所选 (X)",
+    "panel.segments.active-none": "请在下方列表中点击标签",
     "panel.segments.import-parse-error": "The file is not valid JSON.",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",
