@@ -417,6 +417,7 @@
     "panel.segments.add-to-active": "Ajouter la sélection (X)",
     "panel.segments.active-none": "Cliquez sur un label dans la liste",
     "panel.segments.import-parse-error": "The file is not valid JSON.",
+    "panel.segments.import-bad-zip": "Impossible de lire l’archive ZIP.",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",
     "panel.segments.import-missing-bin": "Sélectionnez également le fichier .bin.",

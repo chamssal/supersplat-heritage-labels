@@ -417,6 +417,7 @@
     "panel.segments.add-to-active": "添加所选 (X)",
     "panel.segments.active-none": "请在下方列表中点击标签",
     "panel.segments.import-parse-error": "The file is not valid JSON.",
+    "panel.segments.import-bad-zip": "无法读取该 ZIP 文件。",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",
     "panel.segments.import-missing-bin": "请同时选择 .bin 文件。",

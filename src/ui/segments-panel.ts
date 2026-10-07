@@ -2,6 +2,7 @@ import { Button, Container, Label, SelectInput, TextInput } from '@playcanvas/pc
 
 import { Events } from '../events';
 import { DEFAULT_LAYER, Segment, SplatSegments } from '../segments';
+import { zip, unzip, ZipEntry } from '../zip';
 import { i18n } from './localization';
 import deleteSvg from './svg/delete.svg';
 import exportSvg from './svg/export.svg';
@@ -454,17 +455,9 @@ class SegmentsPanel extends Container {
             window.URL.revokeObjectURL(url);
         };
 
-        const download = (doc: any, filename: string) => {
-            save(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' }), filename);
-        };
-
-        // browsers drop downloads fired in the same tick
-        const settle = () => new Promise((resolve) => {
-            setTimeout(resolve, 350);
-        });
-
-        // one file per layer: the base layer keeps the hierarchy, the others are
-        // written as ROIs that reference it
+        // One archive per export. A layer now writes a JSON and a binary for each
+        // of its lists, which is more files than a browser will hand over without
+        // asking - and the set only means anything together anyway.
         exportButton.on('click', async () => {
             const entries = events.invoke('segments.serializeAll') as
                 { layer: string, base: boolean, doc: any }[];
@@ -474,35 +467,55 @@ class SegmentsPanel extends Container {
             const artifact = sanitize(
                 (entries[0].doc.HeritageId || entries[0].doc.HeritageName || 'labels') as string
             );
-            for (let i = 0; i < entries.length; ++i) {
-                const { layer, base, doc } = entries[i];
-                const suffix = base ? 'labels' : 'roi';
-                const stem = `${artifact}_${sanitize(layer)}.${suffix}`;
+
+            const files: ZipEntry[] = [];
+            const encoder = new TextEncoder();
+
+            for (const { layer, base, doc } of entries) {
+                const stem = `${artifact}_${sanitize(layer)}.${base ? 'labels' : 'roi'}`;
                 // the gaussian list leaves the JSON and lands beside it: at two
                 // bytes a gaussian the file stops growing with the model
                 const bins = events.invoke('segments.splitBinary', doc, stem) as
                     { name: string, buffer: ArrayBuffer }[];
-                download(doc, `${stem}.json`);
-                for (const bin of bins) {
-                    await settle();
-                    save(new Blob([bin.buffer], { type: 'application/octet-stream' }), bin.name);
-                }
-                if (i < entries.length - 1) {
-                    await settle();
-                }
+                files.push({
+                    name: `${stem}.json`,
+                    data: encoder.encode(JSON.stringify(doc, null, 1))
+                });
+                bins.forEach(bin => files.push({ name: bin.name, data: new Uint8Array(bin.buffer) }));
             }
+
+            save(await zip(files), `${artifact}.labels.zip`);
         });
 
         importButton.on('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.json,.bin,application/json,application/octet-stream';
+            input.accept = '.json,.bin,.zip,application/json,application/octet-stream,application/zip';
             // several layer files can be picked at once; each one replaces its layer
             input.multiple = true;
             input.onchange = async () => {
-                const files = Array.from(input.files ?? []);
+                let files = Array.from(input.files ?? []);
                 if (files.length === 0) {
                     return;
+                }
+
+                // an archive stands for the files inside it, so unpack it and
+                // carry on as if those had been picked
+                for (const archive of files.filter(f => f.name.toLowerCase().endsWith('.zip'))) {
+                    let unpacked;
+                    try {
+                        unpacked = await unzip(await archive.arrayBuffer());
+                    } catch (error) {
+                        await events.invoke('showPopup', {
+                            type: 'error',
+                            header: i18n.t('popup.error'),
+                            message: `${archive.name}: ${i18n.t('panel.segments.import-bad-zip')}`
+                        });
+                        continue;
+                    }
+                    files = files.filter(f => f !== archive).concat(
+                        unpacked.map(e => new File([e.data as BlobPart], e.name))
+                    );
                 }
                 const bins = files.filter(f => f.name.toLowerCase().endsWith('.bin'));
                 const docs = files.filter(f => !f.name.toLowerCase().endsWith('.bin'));

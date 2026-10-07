@@ -417,6 +417,7 @@
     "panel.segments.add-to-active": "선택 영역 추가 (X)",
     "panel.segments.active-none": "아래 목록에서 라벨을 클릭하세요",
     "panel.segments.import-parse-error": "JSON 형식이 올바르지 않습니다.",
+    "panel.segments.import-bad-zip": "ZIP 파일을 읽을 수 없습니다.",
     "panel.segments.import-bad-format": "labels 배열이 없습니다.",
     "panel.segments.import-count-mismatch": "라벨 개수가 이 스플랫의 가우시안 수와 다릅니다.",
     "panel.segments.import-missing-bin": ".bin 파일도 함께 선택해 주세요.",
