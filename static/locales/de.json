@@ -419,6 +419,8 @@
     "panel.segments.import-parse-error": "The file is not valid JSON.",
     "panel.segments.import-bad-format": "The file has no labels array.",
     "panel.segments.import-count-mismatch": "The label count does not match the number of gaussians in this splat.",
+    "panel.segments.import-missing-bin": "Bitte auch die .bin-Datei auswählen.",
+    "panel.segments.import-bin-too-short": "Die .bin-Datei ist kürzer als die Anzahl der Label — passt sie zu dieser Datei?",
     "panel.segments.import-no-splat": "Open a splat first.",
     "tooltip.bottom-toolbar.label": "Label Tool",
     "label.no-label": "no label",

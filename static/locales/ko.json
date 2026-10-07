@@ -419,6 +419,8 @@
     "panel.segments.import-parse-error": "JSON 형식이 올바르지 않습니다.",
     "panel.segments.import-bad-format": "labels 배열이 없습니다.",
     "panel.segments.import-count-mismatch": "라벨 개수가 이 스플랫의 가우시안 수와 다릅니다.",
+    "panel.segments.import-missing-bin": ".bin 파일도 함께 선택해 주세요.",
+    "panel.segments.import-bin-too-short": ".bin 파일이 라벨 수보다 짧습니다. 짝이 맞는 파일인지 확인해 주세요.",
     "panel.segments.import-no-splat": "스플랫을 먼저 열어주세요.",
     "tooltip.bottom-toolbar.label": "라벨 도구",
     "label.no-label": "라벨 없음",

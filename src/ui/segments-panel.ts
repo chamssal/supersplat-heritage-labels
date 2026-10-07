@@ -443,8 +443,7 @@ class SegmentsPanel extends Container {
 
         const sanitize = (value: string) => value.trim().replace(/[^\w.-]+/g, '_');
 
-        const download = (doc: any, filename: string) => {
-            const blob = new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' });
+        const save = (blob: Blob, filename: string) => {
             const url = window.URL.createObjectURL(blob);
             const anchor = document.createElement('a');
             anchor.download = filename;
@@ -452,6 +451,15 @@ class SegmentsPanel extends Container {
             anchor.click();
             window.URL.revokeObjectURL(url);
         };
+
+        const download = (doc: any, filename: string) => {
+            save(new Blob([JSON.stringify(doc, null, 1)], { type: 'application/json' }), filename);
+        };
+
+        // browsers drop downloads fired in the same tick
+        const settle = () => new Promise((resolve) => {
+            setTimeout(resolve, 350);
+        });
 
         // one file per layer: the base layer keeps the hierarchy, the others are
         // written as ROIs that reference it
@@ -467,12 +475,18 @@ class SegmentsPanel extends Container {
             for (let i = 0; i < entries.length; ++i) {
                 const { layer, base, doc } = entries[i];
                 const suffix = base ? 'labels' : 'roi';
-                download(doc, `${artifact}_${sanitize(layer)}.${suffix}.json`);
-                // browsers drop downloads fired in the same tick
+                const stem = `${artifact}_${sanitize(layer)}.${suffix}`;
+                // the gaussian list leaves the JSON and lands beside it: at two
+                // bytes a gaussian the file stops growing with the model
+                const binName = `${stem}.bin`;
+                const bin = events.invoke('segments.splitBinary', doc, binName) as ArrayBuffer | null;
+                download(doc, `${stem}.json`);
+                if (bin) {
+                    await settle();
+                    save(new Blob([bin], { type: 'application/octet-stream' }), binName);
+                }
                 if (i < entries.length - 1) {
-                    await new Promise((resolve) => {
-                        setTimeout(resolve, 350);
-                    });
+                    await settle();
                 }
             }
         });
@@ -480,7 +494,7 @@ class SegmentsPanel extends Container {
         importButton.on('click', () => {
             const input = document.createElement('input');
             input.type = 'file';
-            input.accept = '.json,application/json';
+            input.accept = '.json,.bin,application/json,application/octet-stream';
             // several layer files can be picked at once; each one replaces its layer
             input.multiple = true;
             input.onchange = async () => {
@@ -488,9 +502,22 @@ class SegmentsPanel extends Container {
                 if (files.length === 0) {
                     return;
                 }
+                const bins = files.filter(f => f.name.toLowerCase().endsWith('.bin'));
+                const docs = files.filter(f => !f.name.toLowerCase().endsWith('.bin'));
                 // the base layer must land first so the ROI files can reference it
-                files.sort((a, b) => Number(b.name.includes('.labels.')) - Number(a.name.includes('.labels.')));
-                for (const file of files) {
+                docs.sort((a, b) => Number(b.name.includes('.labels.')) - Number(a.name.includes('.labels.')));
+
+                // A download folder renames duplicates ("x.labels (1).bin"), so the
+                // name the JSON recorded is a first guess, not a guarantee: fall
+                // back to the kind of file it is, then to the only one picked.
+                const binFor = (wanted: string, suffix: string) => {
+                    const lower = wanted.toLowerCase();
+                    return bins.find(f => f.name.toLowerCase() === lower) ??
+                        bins.find(f => f.name.toLowerCase().includes(`.${suffix}.`)) ??
+                        (bins.length === 1 ? bins[0] : null);
+                };
+
+                for (const file of docs) {
                     let doc;
                     try {
                         doc = JSON.parse(await file.text());
@@ -502,6 +529,22 @@ class SegmentsPanel extends Container {
                         });
                         continue;
                     }
+
+                    const wanted = doc?.labels?.file ??
+                        doc?.ROIs?.find((r: any) => r?.Gaussian_Indices?.file)?.Gaussian_Indices?.file;
+                    const bin = wanted ? binFor(wanted, doc.labels ? 'labels' : 'roi') : null;
+                    const inlined = events.invoke(
+                        'segments.inlineBinary', doc, bin ? await bin.arrayBuffer() : null
+                    );
+                    if (inlined !== 'ok') {
+                        await events.invoke('showPopup', {
+                            type: 'error',
+                            header: i18n.t('popup.error'),
+                            message: `${file.name}: ${i18n.t(`panel.segments.import-${inlined}`)}`
+                        });
+                        continue;
+                    }
+
                     const result = events.invoke('segments.deserialize', doc);
                     if (result !== 'ok') {
                         await events.invoke('showPopup', {
