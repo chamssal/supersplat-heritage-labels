@@ -2,10 +2,10 @@
 """
 라벨 JSON의 큰 정수 배열을 별도 BIN 파일로 분리한다.
 
-  labels.json : "labels"(가우시안당 라벨 id) 배열  -> <stem>.labels.bin  (int16 LE)
-  roi.json    : 각 ROI의 "Gaussian_Indices" 배열   -> <stem>.roi.bin     (uint32 LE)
+  labels.json : "labels"(가우시안당 라벨 id) 배열  -> <stem>.labels.bin        (int16 LE)
+  roi.json    : 각 ROI의 "Gaussian_Indices" 배열   -> <stem>.roi.<ROI_ID>.bin  (uint32 LE)
 
-JSON 쪽에는 배열 대신 그 BIN을 가리키는 설명만 남는다. 인덱스 기준(원본 PLY
+JSON 쪽에는 배열 대신 그 BIN 파일의 이름만 남는다. Object_Indices 는 그대로 둔다. 인덱스 기준(원본 PLY
 행 번호), 값의 의미(-1 = 라벨 없음)는 그대로이고 바뀌는 것은 담는 그릇뿐이다.
 
 사용법:
@@ -48,39 +48,30 @@ def _read(path, fmt):
 
 
 def convert_labels(doc, stem, out_dir):
-    name, fmt, _ = LABEL_DTYPE
+    _, fmt, width = LABEL_DTYPE
     values = doc['labels']
+    if not isinstance(values, list):
+        raise SystemExit(f'{stem}: 이미 변환된 파일입니다')
     binname = f'{stem}.labels.bin'
     _write(os.path.join(out_dir, binname), values, fmt)
-    doc['labels'] = {
-        'file': binname,
-        'dtype': name,
-        'endian': 'little',
-        'count': len(values),
-        'no_label': -1
-    }
-    return [(binname, len(values) * LABEL_DTYPE[2])]
+    doc['labels'] = binname          # 경로 문자열 하나만 남는다
+    return [(binname, len(values) * width)]
 
 
 def convert_roi(doc, stem, out_dir):
-    name, fmt, width = INDEX_DTYPE
-    binname = f'{stem}.roi.bin'
-    flat = []
+    _, fmt, width = INDEX_DTYPE
+    written = []
     for roi in doc['ROIs']:
         idx = roi['Gaussian_Indices']
         if not isinstance(idx, list):
             raise SystemExit(f'{stem}: 이미 변환된 파일입니다')
-        offset = len(flat) * width
-        flat.extend(idx)
-        roi['Gaussian_Indices'] = {
-            'file': binname,
-            'dtype': name,
-            'endian': 'little',
-            'offset': offset,      # 바이트 단위
-            'count': len(idx)
-        }
-    _write(os.path.join(out_dir, binname), flat, fmt)
-    return [(binname, len(flat) * width)]
+        # ROI 하나당 파일 하나. 오프셋이 필요 없고, 하나 읽는 것이 곧 파일 하나를
+        # 통째로 읽는 것이 된다. Object_Indices 는 JSON 에 그대로 둔다.
+        binname = f"{stem}.roi.{roi['ROI_ID']}.bin"
+        _write(os.path.join(out_dir, binname), idx, fmt)
+        roi['Gaussian_Indices'] = binname
+        written.append((binname, len(idx) * width))
+    return written
 
 
 def check(path, out_dir=None):
@@ -94,13 +85,13 @@ def check(path, out_dir=None):
         assert list(a) == original['labels'], 'labels 불일치'
         print(f'  labels  {len(a):,}개 일치')
     if 'ROIs' in original:
-        a = _read(os.path.join(folder, f'{stem}.roi.bin'), INDEX_DTYPE[1])
-        pos = 0
+        total = 0
         for roi in original['ROIs']:
-            g = roi['Gaussian_Indices']
-            assert list(a[pos:pos + len(g)]) == g, f"{roi['Name']} 불일치"
-            pos += len(g)
-        print(f'  ROI     {pos:,}개 일치')
+            a = _read(os.path.join(folder, f"{stem}.roi.{roi['ROI_ID']}.bin"), INDEX_DTYPE[1])
+            assert list(a) == roi['Gaussian_Indices'], f"{roi['Name']} 불일치"
+            total += len(a)
+            print(f"  ROI {roi['Name']:<6} {len(a):,}개 일치")
+        print(f'  ROI 합계 {total:,}개 일치')
 
 
 def main():

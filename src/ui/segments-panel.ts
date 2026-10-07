@@ -441,7 +441,9 @@ class SegmentsPanel extends Container {
 
         clearButton.on('click', () => events.fire('segments.clearSelected'));
 
-        const sanitize = (value: string) => value.trim().replace(/[^\w.-]+/g, '_');
+        // \w is ASCII only, so a Korean artifact name came out as "___". Keep any
+        // letter or digit and fold the rest - spaces included - into one underscore.
+        const sanitize = (value: string) => value.trim().replace(/[^\p{L}\p{N}._-]+/gu, '_');
 
         const save = (blob: Blob, filename: string) => {
             const url = window.URL.createObjectURL(blob);
@@ -478,12 +480,12 @@ class SegmentsPanel extends Container {
                 const stem = `${artifact}_${sanitize(layer)}.${suffix}`;
                 // the gaussian list leaves the JSON and lands beside it: at two
                 // bytes a gaussian the file stops growing with the model
-                const binName = `${stem}.bin`;
-                const bin = events.invoke('segments.splitBinary', doc, binName) as ArrayBuffer | null;
+                const bins = events.invoke('segments.splitBinary', doc, stem) as
+                    { name: string, buffer: ArrayBuffer }[];
                 download(doc, `${stem}.json`);
-                if (bin) {
+                for (const bin of bins) {
                     await settle();
-                    save(new Blob([bin], { type: 'application/octet-stream' }), binName);
+                    save(new Blob([bin.buffer], { type: 'application/octet-stream' }), bin.name);
                 }
                 if (i < entries.length - 1) {
                     await settle();
@@ -508,12 +510,15 @@ class SegmentsPanel extends Container {
                 docs.sort((a, b) => Number(b.name.includes('.labels.')) - Number(a.name.includes('.labels.')));
 
                 // A download folder renames duplicates ("x.labels (1).bin"), so the
-                // name the JSON recorded is a first guess, not a guarantee: fall
-                // back to the kind of file it is, then to the only one picked.
-                const binFor = (wanted: string, suffix: string) => {
-                    const lower = wanted.toLowerCase();
-                    return bins.find(f => f.name.toLowerCase() === lower) ??
-                        bins.find(f => f.name.toLowerCase().includes(`.${suffix}.`)) ??
+                // name the JSON recorded is a first guess, not a guarantee: strip
+                // that suffix from both sides before comparing, and fall back to
+                // the only file picked when there is only one.
+                const key = (name: string) => name.toLowerCase()
+                .replace(/\s*\(\d+\)(?=\.[^.]*$|$)/, '')
+                .replace(/^.*[\\/]/, '');
+                const binFor = (wanted: string) => {
+                    const want = key(wanted);
+                    return bins.find(f => key(f.name) === want) ??
                         (bins.length === 1 ? bins[0] : null);
                 };
 
@@ -530,12 +535,17 @@ class SegmentsPanel extends Container {
                         continue;
                     }
 
-                    const wanted = doc?.labels?.file ??
-                        doc?.ROIs?.find((r: any) => r?.Gaussian_Indices?.file)?.Gaussian_Indices?.file;
-                    const bin = wanted ? binFor(wanted, doc.labels ? 'labels' : 'roi') : null;
-                    const inlined = events.invoke(
-                        'segments.inlineBinary', doc, bin ? await bin.arrayBuffer() : null
-                    );
+                    // inlineBinary asks for each file it needs by name; the reads
+                    // are done up front because it is not an async function
+                    const bytes = new Map<string, ArrayBuffer>();
+                    for (const f of bins) {
+                        bytes.set(key(f.name), await f.arrayBuffer());
+                    }
+                    const find = (name: string) => {
+                        const match = binFor(name);
+                        return match ? (bytes.get(key(match.name)) ?? null) : null;
+                    };
+                    const inlined = events.invoke('segments.inlineBinary', doc, find);
                     if (inlined !== 'ok') {
                         await events.invoke('showPopup', {
                             type: 'error',

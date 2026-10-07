@@ -73,15 +73,16 @@ const FILE_VERSION = 4;
 const ROI_FORMAT_VERSION = '1.0';
 const MODEL_VERSION = '1.0';
 
-// The two big integer arrays are written beside the JSON as a flat binary blob:
+// The two big integer arrays are written beside the JSON as flat binary files:
 // one gaussian's label is 2 bytes instead of the 3-7 characters JSON spends on
-// it. The JSON keeps a descriptor in the array's place saying how to read the
-// blob back, so it stays the only thing a human has to look at.
-//   labels           int16  little-endian, one per gaussian, -1 = no label
-//   Gaussian_Indices uint32 little-endian, ROIs concatenated in document order
+// it. In the array's place the JSON keeps the file's name and nothing else, as
+// 주관사 asked, so the dtype below is fixed by agreement rather than recorded in
+// the file - it belongs in the format document, not in a field.
+//   labels            int16  little-endian, one per gaussian, -1 = no label
+//   Gaussian_Indices  uint32 little-endian, one file per ROI, ascending
+// Object_Indices stays inline: it is short and a reader wants to see it.
 const LABEL_BYTES = 2;
 const INDEX_BYTES = 4;
-const BIN_ENDIAN = 'little';
 
 // typed arrays use the host's byte order; every mainstream platform is little
 // endian, but a file format may not rest on that
@@ -614,86 +615,86 @@ const registerSegmentEvents = (events: Events) => {
         };
     };
 
-    // Move a document's one big integer array into a binary blob, leaving a
-    // descriptor behind. Returns the blob, or null if there was nothing to move
-    // (an empty ROI file, say). The caller owns the file name, so it owns the
-    // naming scheme too.
-    events.function('segments.splitBinary', (doc: any, binName: string): ArrayBuffer | null => {
+    // Move a document's gaussian list out to its own binary file, leaving the
+    // file's name in its place. Returns one entry per file written; the caller
+    // owns the naming scheme, so it passes the stem the names are built from.
+    events.function('segments.splitBinary', (doc: any, stem: string) => {
+        const written: { name: string, buffer: ArrayBuffer }[] = [];
+
         if (Array.isArray(doc.labels)) {
             const values = doc.labels as number[];
             const view = new Int16Array(values.length);
             for (let i = 0; i < values.length; ++i) {
                 view[i] = values[i];
             }
-            doc.labels = {
-                file: binName,
-                dtype: 'int16',
-                endian: BIN_ENDIAN,
-                count: values.length,
-                no_label: NO_LABEL
-            };
-            return toLittleEndian(view);
+            const name = `${stem}.bin`;
+            doc.labels = name;
+            written.push({ name, buffer: toLittleEndian(view) });
+            return written;
         }
 
         if (Array.isArray(doc.ROIs)) {
-            let total = 0;
-            doc.ROIs.forEach((roi: any) => {
-                total += Array.isArray(roi.Gaussian_Indices) ? roi.Gaussian_Indices.length : 0;
-            });
-            const view = new Uint32Array(total);
-            let at = 0;
+            // a file per ROI: the JSON holds one path per ROI and no offsets, so
+            // reading one is reading a whole file
             doc.ROIs.forEach((roi: any) => {
                 const indices: number[] = Array.isArray(roi.Gaussian_Indices) ? roi.Gaussian_Indices : [];
-                view.set(indices, at);
-                roi.Gaussian_Indices = {
-                    file: binName,
-                    dtype: 'uint32',
-                    endian: BIN_ENDIAN,
-                    offset: at * INDEX_BYTES,
-                    count: indices.length
-                };
-                at += indices.length;
+                const name = `${stem}.${roi.ROI_ID}.bin`;
+                roi.Gaussian_Indices = name;
+                written.push({ name, buffer: toLittleEndian(Uint32Array.from(indices)) });
             });
-            return toLittleEndian(view);
         }
 
-        return null;
+        return written;
     });
 
-    // The inverse: put the numbers back into the document so the readers below
-    // see the same shape they always have. A document whose arrays are still
-    // inline passes through untouched, which is what keeps older files readable.
-    events.function('segments.inlineBinary', (doc: any, buffer: ArrayBuffer | null) => {
-        const descriptor = (value: any) => value && !Array.isArray(value) && typeof value === 'object' &&
-            typeof value.count === 'number';
+    // The inverse: put the numbers back so the readers below see the shape they
+    // always have. `find` hands back the bytes of a named file, or null.
+    // A document whose lists are still inline passes through untouched, which is
+    // what keeps files exported before this readable.
+    events.function('segments.inlineBinary', (doc: any, find: (name: string) => ArrayBuffer | null) => {
+        const read = (name: string, width: number) => {
+            const buffer = find(name);
+            return buffer ? fromLittleEndian(buffer, width) : null;
+        };
 
-        if (descriptor(doc?.labels)) {
+        // the descriptor object this format used briefly, before 주관사 asked for
+        // a bare path
+        const pathOf = (value: any) => {
+            if (typeof value === 'string') {
+                return value;
+            }
+            return (value && typeof value === 'object' && typeof value.file === 'string') ? value.file : null;
+        };
+
+        const labelsPath = pathOf(doc?.labels);
+        if (labelsPath) {
+            const buffer = read(labelsPath, LABEL_BYTES);
             if (!buffer) {
                 return 'missing-bin';
             }
-            const view = new Int16Array(fromLittleEndian(buffer, LABEL_BYTES));
-            if (view.length < doc.labels.count) {
-                return 'bin-too-short';
-            }
-            doc.labels = Array.from(view.subarray(0, doc.labels.count));
+            doc.labels = Array.from(new Int16Array(buffer));
             return 'ok';
         }
 
-        if (Array.isArray(doc?.ROIs) && doc.ROIs.some((r: any) => descriptor(r.Gaussian_Indices))) {
-            if (!buffer) {
-                return 'missing-bin';
-            }
-            const view = new Uint32Array(fromLittleEndian(buffer, INDEX_BYTES));
+        if (Array.isArray(doc?.ROIs)) {
             for (const roi of doc.ROIs) {
-                const d = roi.Gaussian_Indices;
-                if (!descriptor(d)) {
+                const path = pathOf(roi.Gaussian_Indices);
+                if (!path) {
                     continue;
                 }
-                const start = (d.offset ?? 0) / INDEX_BYTES;
-                if (start + d.count > view.length) {
-                    return 'bin-too-short';
+                const buffer = read(path, INDEX_BYTES);
+                if (!buffer) {
+                    return 'missing-bin';
                 }
-                roi.Gaussian_Indices = Array.from(view.subarray(start, start + d.count));
+                const view = new Uint32Array(buffer);
+                const descriptor = roi.Gaussian_Indices;
+                roi.Gaussian_Indices = (descriptor && typeof descriptor === 'object') ?
+                    // the one-blob-with-offsets layout, read back by its own rules
+                    Array.from(view.subarray(
+                        (descriptor.offset ?? 0) / INDEX_BYTES,
+                        (descriptor.offset ?? 0) / INDEX_BYTES + descriptor.count
+                    )) :
+                    Array.from(view);
             }
             return 'ok';
         }
