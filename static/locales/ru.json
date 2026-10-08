@@ -411,6 +411,8 @@
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Удалить весь этот слой",
     "panel.segments.base-layer": "(база)",
+    "panel.segments.make-base": "Сделать базовым",
+    "panel.segments.make-base-tip": "Сделать этот слой базовым. Базовый слой содержит иерархию, на которую ссылаются ROI остальных слоёв.",
     "panel.segments.delete": "Удалить эту метку",
     "panel.segments.select": "Выбрать гауссианы этой метки",
     "panel.segments.add-to": "Добавить выбранные гауссианы к этой метке",

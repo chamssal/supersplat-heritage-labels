@@ -411,6 +411,8 @@
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "このレイヤー全体を削除",
     "panel.segments.base-layer": "(基準)",
+    "panel.segments.make-base": "基準にする",
+    "panel.segments.make-base-tip": "このレイヤーを基準レイヤーにします。基準レイヤーは階層を持ち、他のレイヤーの ROI が参照します。",
     "panel.segments.delete": "このラベルを削除",
     "panel.segments.select": "このラベルのガウシアンを選択",
     "panel.segments.add-to": "選択したガウシアンをこのラベルに追加",

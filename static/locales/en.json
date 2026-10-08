@@ -411,6 +411,8 @@
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Delete this whole layer",
     "panel.segments.base-layer": "(base)",
+    "panel.segments.make-base": "Make base",
+    "panel.segments.make-base-tip": "Use this layer as the base. The base layer carries the hierarchy, and every other layer’s ROIs reference it.",
     "panel.segments.delete": "Delete this label",
     "panel.segments.select": "Select gaussians of this label",
     "panel.segments.add-to": "Add selected gaussians to this label",

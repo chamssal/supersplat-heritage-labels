@@ -331,6 +331,18 @@ class SegmentsPanel extends Container {
 
                 groupHeader.append(groupName);
                 groupHeader.append(groupCount);
+                // which layer is the base decides the whole export's shape, so it
+                // must be visible and changeable rather than implied by the order
+                // the layers happened to be created in
+                if (!isBase) {
+                    const makeBase = new Button({ class: 'segments-group-base' });
+                    i18n.bindText(makeBase, 'panel.segments.make-base');
+                    i18n.onChange(() => {
+                        makeBase.dom.setAttribute('title', i18n.t('panel.segments.make-base-tip'));
+                    }, makeBase);
+                    makeBase.on('click', () => events.fire('segments.setBaseLayer', layer));
+                    groupHeader.append(makeBase);
+                }
                 groupHeader.append(groupDelete);
                 group.append(groupHeader);
 

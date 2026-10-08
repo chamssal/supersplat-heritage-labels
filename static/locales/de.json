@@ -411,6 +411,8 @@
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Diese ganze Ebene löschen",
     "panel.segments.base-layer": "(Basis)",
+    "panel.segments.make-base": "Als Basis",
+    "panel.segments.make-base-tip": "Diese Ebene als Basisebene verwenden. Sie trägt die Hierarchie, auf die sich die ROIs aller anderen Ebenen beziehen.",
     "panel.segments.delete": "Dieses Label löschen",
     "panel.segments.select": "Gaussians dieses Labels auswählen",
     "panel.segments.add-to": "Ausgewählte Gaussians zu diesem Label hinzufügen",

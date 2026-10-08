@@ -411,6 +411,8 @@
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "删除整个图层",
     "panel.segments.base-layer": "(基准)",
+    "panel.segments.make-base": "设为基准",
+    "panel.segments.make-base-tip": "将此图层设为基准图层。基准图层承载层级结构，其他图层的 ROI 都引用它。",
     "panel.segments.delete": "删除此标签",
     "panel.segments.select": "选择此标签的高斯",
     "panel.segments.add-to": "将所选高斯添加到此标签",

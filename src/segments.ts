@@ -278,6 +278,24 @@ class SplatSegments {
         }
     }
 
+    // Empty a layer without unregistering it. Import used to delete the layer and
+    // let rows() add it back, which appended it to the end - and since the first
+    // layer is the base, re-importing one layer silently promoted another.
+    clearLayer(layer: string) {
+        this.segments = this.segments.filter(s => s.layer !== layer);
+        this.rowsByLayer.get(layer)?.fill(NO_LABEL);
+    }
+
+    // Make a layer the base one. The base is layers[0]: the layer whose file
+    // carries the hierarchy, and that every other layer's ROIs reference.
+    setBaseLayer(layer: string) {
+        if (!this.rowsByLayer.has(layer) || this.layers[0] === layer) {
+            return false;
+        }
+        this.layers = [layer, ...this.layers.filter(l => l !== layer)];
+        return true;
+    }
+
     deleteLayer(layer: string) {
         this.segmentsOfLayer(layer).forEach((s) => {
             this.segments = this.segments.filter(x => x.id !== s.id);
@@ -522,6 +540,12 @@ const registerSegmentEvents = (events: Events) => {
         changed();
     });
 
+    events.on('segments.setBaseLayer', (layer: string) => {
+        if (dataOf(selected())?.setBaseLayer(layer)) {
+            changed();
+        }
+    });
+
     events.on('segments.deleteLayer', (layer: string) => {
         dataOf(selected())?.deleteLayer(layer);
         changed();
@@ -729,10 +753,10 @@ const registerSegmentEvents = (events: Events) => {
 
     // ---- import ------------------------------------------------------------
 
-    // replace one layer without touching the others
+    // replace one layer's contents, leaving its position among the layers alone
     const dropLayer = (data: SplatSegments, layer: string) => {
         if (data.hasLayer(layer)) {
-            data.deleteLayer(layer);
+            data.clearLayer(layer);
         }
     };
 
@@ -796,6 +820,11 @@ const registerSegmentEvents = (events: Events) => {
                 }
             });
             activeLayer = layer;
+            // the file names the layer its ROIs were written against; honour it so
+            // a set of files read back in any order agrees on the base
+            if (typeof doc.Base_Layer === 'string' && doc.Base_Layer) {
+                data.setBaseLayer(doc.Base_Layer);
+            }
             changed();
             return 'ok';
         }
@@ -820,6 +849,9 @@ const registerSegmentEvents = (events: Events) => {
                 rows[row] = (typeof id === 'number' && data.segmentById(id)) ? id : NO_LABEL;
             }
             activeLayer = layer;
+            // the hierarchy form is what the base layer is written in, so reading
+            // one says which layer the file considers the base
+            data.setBaseLayer(layer);
             changed();
             return 'ok';
         }

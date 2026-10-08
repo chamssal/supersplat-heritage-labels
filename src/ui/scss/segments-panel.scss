@@ -120,6 +120,15 @@
         white-space: nowrap;
     }
 
+    .segments-group-base {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        font-size: 11px;
+        padding: 1px 6px;
+        height: 18px;
+        line-height: 16px;
+    }
+
     .segments-group-count {
         flex: 0 0 auto;
         font-size: 11px;

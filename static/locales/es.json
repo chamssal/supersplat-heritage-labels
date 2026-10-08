@@ -411,6 +411,8 @@
     "panel.segments.export": "Export",
     "panel.segments.delete-layer": "Eliminar toda esta capa",
     "panel.segments.base-layer": "(base)",
+    "panel.segments.make-base": "Usar como base",
+    "panel.segments.make-base-tip": "Usar esta capa como capa base. La capa base contiene la jerarquía a la que hacen referencia los ROI de las demás capas.",
     "panel.segments.delete": "Eliminar esta etiqueta",
     "panel.segments.select": "Seleccionar gaussianas de esta etiqueta",
     "panel.segments.add-to": "Añadir gaussianas seleccionadas a esta etiqueta",
